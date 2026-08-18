@@ -50,7 +50,10 @@ run() {
         TTY_FLAG=""
         [ -t 0 ] && TTY_FLAG="-it"
         docker build -t "$IMAGE" .
-        docker run --rm $TTY_FLAG -v "$PWD:/src" -w /src/buildroot "$IMAGE" sh -c "$1"
+        # FORCE_UNSAFE_CONFIGURE: в контейнере сборка идёт под root,
+        # иначе configure некоторых host-пакетов (tar) отказывается работать
+        docker run --rm $TTY_FLAG -v "$PWD:/src" -w /src/buildroot \
+            -e FORCE_UNSAFE_CONFIGURE=1 "$IMAGE" sh -c "$1"
     fi
 }
 
