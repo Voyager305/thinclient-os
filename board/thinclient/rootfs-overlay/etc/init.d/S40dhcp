@@ -1,0 +1,16 @@
+#!/bin/sh
+# DHCP на всех проводных интерфейсах, каким бы именем их ни назвали (eth0/enp1s0...)
+case "$1" in
+    start)
+        ip link set lo up
+        for path in /sys/class/net/*; do
+            iface=$(basename "$path")
+            [ "$iface" = "lo" ] && continue
+            ip link set "$iface" up
+            udhcpc -i "$iface" -b -t 5 -A 10 >/dev/null 2>&1 &
+        done
+        ;;
+    stop)
+        killall udhcpc 2>/dev/null
+        ;;
+esac

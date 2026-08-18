@@ -1,0 +1,41 @@
+# Всё встроено в ядро (=y), чтобы не возиться с модулями в initramfs
+
+# devtmpfs, чтобы /dev наполнялся сам
+CONFIG_DEVTMPFS=y
+CONFIG_DEVTMPFS_MOUNT=y
+
+# Графика: framebuffer-консоль для меню.
+# i915 — старые чипсеты 945GSE (Atom N270 и т.п.), даёт KMS.
+# gma500 — Poulsbo/Cedar Trail (GMA 500/600/3600/3650), KMS без ускорения — для RDP хватает.
+CONFIG_FB=y
+CONFIG_FB_VESA=y
+CONFIG_FB_SIMPLE=y
+CONFIG_FRAMEBUFFER_CONSOLE=y
+CONFIG_DRM=y
+CONFIG_DRM_FBDEV_EMULATION=y
+CONFIG_AGP=y
+CONFIG_AGP_INTEL=y
+CONFIG_DRM_I915=y
+CONFIG_DRM_GMA500=y
+
+# Флешка: USB + vfat
+CONFIG_USB=y
+CONFIG_USB_EHCI_HCD=y
+CONFIG_USB_UHCI_HCD=y
+CONFIG_USB_XHCI_HCD=y
+CONFIG_USB_STORAGE=y
+CONFIG_VFAT_FS=y
+CONFIG_NLS_CODEPAGE_437=y
+CONFIG_NLS_ISO8859_1=y
+
+# Сетевухи, которые обычно стоят в атомных тонких клиентах/неттопах
+CONFIG_E1000E=y
+CONFIG_E100=y
+CONFIG_R8169=y
+CONFIG_8139TOO=y
+CONFIG_ATL1C=y
+CONFIG_ATL1E=y
+CONFIG_SKY2=y
+
+# Ввод для X
+CONFIG_INPUT_EVDEV=y

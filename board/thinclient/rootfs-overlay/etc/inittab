@@ -1,0 +1,17 @@
+# busybox init
+::sysinit:/bin/mount -t proc proc /proc
+::sysinit:/bin/mount -o remount,rw /
+::sysinit:/bin/mkdir -p /dev/pts /dev/shm
+::sysinit:/bin/mount -a
+::sysinit:/bin/hostname -F /etc/hostname
+::sysinit:/etc/init.d/rcS
+
+# tty1 — меню тонкого клиента вместо логина
+tty1::respawn:/usr/bin/tc-menu
+
+# tty2 — отладочная консоль (root без пароля); в бою можно убрать
+tty2::respawn:/sbin/getty -L tty2 115200 linux
+
+::ctrlaltdel:/sbin/reboot
+::shutdown:/etc/init.d/rcK
+::shutdown:/bin/umount -a -r

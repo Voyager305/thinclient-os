@@ -1,0 +1,48 @@
+# Архитектура: 32-битный x86, заведётся на любом Atom, включая N270/N280.
+# Если весь парк точно 64-битный (D525/N2600+) — замени на BR2_x86_64=y + BR2_x86_atom=y.
+BR2_i386=y
+BR2_x86_i686=y
+
+# Тулчейн: glibc (Xorg и FreeRDP с ним собираются без сюрпризов), C++ нужен зависимостям
+BR2_TOOLCHAIN_BUILDROOT_GLIBC=y
+BR2_TOOLCHAIN_BUILDROOT_CXX=y
+
+BR2_TARGET_GENERIC_HOSTNAME="thinclient"
+BR2_TARGET_GENERIC_ISSUE="Thin client"
+
+# eudev нужен, чтобы Xorg сам находил клавиатуру/мышь/видео без ручного xorg.conf
+BR2_ROOTFS_DEVICE_CREATION_DYNAMIC_EUDEV=y
+
+BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_THINCLIENT_PATH)/board/thinclient/rootfs-overlay"
+BR2_ROOTFS_POST_IMAGE_SCRIPT="$(BR2_EXTERNAL_THINCLIENT_PATH)/board/thinclient/post-image.sh"
+
+# Ядро: дефолтный конфиг арха + наш фрагмент (fb, i915/gma500, сетевухи, vfat, usb)
+BR2_LINUX_KERNEL=y
+BR2_LINUX_KERNEL_USE_ARCH_DEFAULT_CONFIG=y
+BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_THINCLIENT_PATH)/board/thinclient/linux.fragment"
+
+# Минимальный X: только сервер, драйверы и xinit — ни WM, ни DE
+BR2_PACKAGE_XORG7=y
+BR2_PACKAGE_XSERVER_XORG_SERVER=y
+BR2_PACKAGE_XDRIVER_XF86_INPUT_LIBINPUT=y
+BR2_PACKAGE_XDRIVER_XF86_VIDEO_FBDEV=y
+BR2_PACKAGE_XDRIVER_XF86_VIDEO_INTEL=y
+BR2_PACKAGE_XAPP_XINIT=y
+BR2_PACKAGE_XAPP_XAUTH=y
+
+# FreeRDP 3 (клиент xfreerdp)
+BR2_PACKAGE_FREERDP=y
+BR2_PACKAGE_FREERDP_CLIENT_X11=y
+
+# Консольное меню: dialog + ncurses с UTF-8, kbd — консольные шрифты с кириллицей
+BR2_PACKAGE_DIALOG=y
+BR2_PACKAGE_NCURSES_WCHAR=y
+BR2_PACKAGE_KBD=y
+
+# TLS-сертификаты (если захочется убрать /cert:ignore)
+BR2_PACKAGE_CA_CERTIFICATES=y
+
+# rootfs целиком в RAM: initramfs cpio+gzip, никакого раздела с системой
+BR2_TARGET_ROOTFS_CPIO=y
+BR2_TARGET_ROOTFS_CPIO_GZIP=y
+# BR2_TARGET_ROOTFS_TAR is not set

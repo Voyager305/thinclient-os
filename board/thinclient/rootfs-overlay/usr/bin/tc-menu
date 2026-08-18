@@ -1,0 +1,117 @@
+#!/bin/sh
+# Главное меню тонкого клиента. Крутится на tty1 вместо getty (см. /etc/inittab).
+# Список серверов — /mnt/flash/servers.conf (FAT-раздел флешки), формат: имя;ip
+# Тема оформления — /etc/dialogrc.
+
+CONF=/mnt/flash/servers.conf
+PASS_FILE=/mnt/flash/shell.pass
+export TERM=linux
+export DIALOGRC=/etc/dialogrc
+
+LOGO=$(cat <<'EOF'
+ _____  _  _  ___  _  _     ___  _     ___  ___  _  _  _____
+|_   _|| || ||_ _|| \| |   / __|| |   |_ _|| __|| \| ||_   _|
+  | |  | __ | | | | .` |  | (__ | |__  | | | _| | .` |  | |
+  |_|  |_||_||___||_|\_|   \___||____||___||___||_|\_|  |_|
+EOF
+)
+LOGO_W=66
+LOGO_H=6
+MENU_W=64
+BACKTITLE="Thin client"
+
+save_server() {
+    mount -o remount,rw /mnt/flash 2>/dev/null
+    printf '%s;%s\r\n' "$1" "$2" >> "$CONF"
+    sync
+    mount -o remount,ro /mnt/flash 2>/dev/null
+}
+
+add_server() {
+    name=$(dialog --backtitle "$BACKTITLE" --title " Новый сервер " \
+        --inputbox "Имя сервера:" 9 50 3>&1 1>&2 2>&3) || return
+    [ -n "$name" ] || return
+    ip=$(dialog --backtitle "$BACKTITLE" --title " Новый сервер " \
+        --inputbox "IP-адрес (можно ip:порт):" 9 50 3>&1 1>&2 2>&3) || return
+    [ -n "$ip" ] || return
+    save_server "$name" "$ip"
+}
+
+open_shell() {
+    # Если на флешке лежит shell.pass (sha256 от пароля) — спрашиваем пароль.
+    # Создать: printf '%s' 'пароль' | sha256sum  -> первые 64 символа в файл.
+    if [ -f "$PASS_FILE" ]; then
+        try=$(dialog --backtitle "$BACKTITLE" --title " Консоль " --insecure \
+            --passwordbox "Пароль:" 9 40 3>&1 1>&2 2>&3) || return
+        hash=$(printf '%s' "$try" | sha256sum | cut -c1-64)
+        stored=$(tr -d ' \t\r\n' < "$PASS_FILE")
+        if [ "$hash" != "$stored" ]; then
+            dialog --backtitle "$BACKTITLE" --title " Консоль " \
+                --msgbox "Неверный пароль" 6 30
+            return
+        fi
+    fi
+    clear
+    echo "=== Консоль Linux (root). Выход в меню: exit или Ctrl-D ==="
+    /bin/sh -l
+}
+
+connect() {
+    clear
+    echo "Подключение к $1 ..."
+    # X живёт только пока идёт RDP-сессия; вышел из Windows — вернулся в меню
+    xinit /usr/bin/tc-session "$1" -- -nolisten tcp >/var/log/xsession.log 2>&1
+}
+
+while true; do
+    # пункты меню: тег = ip (скрыт через --no-tags), подпись = имя + ip
+    set --
+    if [ -f "$CONF" ]; then
+        while IFS=';' read -r name ip; do
+            name=$(echo "$name" | tr -d '\r')
+            ip=$(echo "$ip" | tr -d '\r')
+            case "$name" in ''|'#'*) continue ;; esac
+            [ -n "$ip" ] || continue
+            set -- "$@" "$ip" "$(printf '%-32s \Z6%s\Zn' "$name" "$ip")"
+        done < "$CONF"
+    fi
+
+    # геометрия: логотип + меню, по центру экрана
+    size=$(stty size 2>/dev/null)
+    rows=${size%% *}; cols=${size##* }
+    [ "$rows" -ge 24 ] 2>/dev/null || rows=25
+    [ "$cols" -ge 80 ] 2>/dev/null || cols=80
+
+    list_h=$(( $# / 2 + 4 ))
+    max_list=$(( rows - LOGO_H - 10 ))
+    [ "$list_h" -gt "$max_list" ] && list_h=$max_list
+    [ "$list_h" -lt 5 ] && list_h=5
+    menu_h=$(( list_h + 7 ))
+
+    logo_x=$(( (cols - LOGO_W) / 2 )); [ "$logo_x" -lt 0 ] && logo_x=0
+    menu_x=$(( (cols - MENU_W) / 2 )); [ "$menu_x" -lt 0 ] && menu_x=0
+    logo_y=$(( (rows - LOGO_H - menu_h) / 2 )); [ "$logo_y" -lt 1 ] && logo_y=1
+    menu_y=$(( logo_y + LOGO_H ))
+
+    choice=$(dialog --backtitle "$BACKTITLE" --colors --keep-window \
+        --begin "$logo_y" "$logo_x" --infobox "$LOGO" $LOGO_H $LOGO_W \
+        --and-widget --backtitle "$BACKTITLE" --colors --no-cancel --no-tags \
+        --begin "$menu_y" "$menu_x" --title " Выбор сервера " \
+        --ok-label "Выбрать" \
+        --menu "" "$menu_h" $MENU_W "$list_h" \
+        "$@" \
+        "ADD"    "\Z6[+]\Zn  Добавить сервер" \
+        "SHELL"  "\Z3[>]\Zn  Консоль Linux" \
+        "REBOOT" "\Z1[r]\Zn  Перезагрузка" \
+        "OFF"    "\Z1[o]\Zn  Выключение" \
+        3>&1 1>&2 2>&3)
+
+    case "$choice" in
+        ADD)    add_server ;;
+        SHELL)  open_shell ;;
+        REBOOT) reboot ;;
+        OFF)    poweroff ;;
+        "")     ;;
+        *)      connect "$choice" ;;
+    esac
+done
