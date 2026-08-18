@@ -46,8 +46,11 @@ run() {
     if [ "$MODE" = native ]; then
         ( cd buildroot && sh -c "$1" )
     else
+        # -t только при живом терминале (иначе падает под CI/фоновым запуском)
+        TTY_FLAG=""
+        [ -t 0 ] && TTY_FLAG="-it"
         docker build -t "$IMAGE" .
-        docker run --rm -it -v "$PWD:/src" -w /src/buildroot "$IMAGE" sh -c "$1"
+        docker run --rm $TTY_FLAG -v "$PWD:/src" -w /src/buildroot "$IMAGE" sh -c "$1"
     fi
 }
 

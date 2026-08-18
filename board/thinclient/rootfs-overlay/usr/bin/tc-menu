@@ -22,8 +22,13 @@ BACKTITLE="Thin client"
 
 save_server() {
     mount -o remount,rw /mnt/flash 2>/dev/null
-    printf '%s;%s\r\n' "$1" "$2" >> "$CONF"
-    sync
+    if printf '%s;%s\r\n' "$1" "$2" >> "$CONF" 2>/dev/null; then
+        sync
+    else
+        # ISO-носитель: файловая система только для чтения
+        dialog --backtitle "$BACKTITLE" --title " Ошибка " --msgbox \
+            "Не удалось сохранить: носитель только для чтения (ISO-образ).\nПостоянный список серверов правится пересборкой либо образом usb.img." 8 60
+    fi
     mount -o remount,ro /mnt/flash 2>/dev/null
 }
 

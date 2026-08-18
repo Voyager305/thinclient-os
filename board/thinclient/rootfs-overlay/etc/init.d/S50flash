@@ -1,23 +1,32 @@
 #!/bin/sh
-# Монтирует FAT-раздел флешки (метка THINCLIENT) в /mnt/flash — там живёт servers.conf.
+# Монтирует носитель с servers.conf в /mnt/flash:
+#  - флешка с usb.img — FAT32, конфиг читается и пишется;
+#  - ISO (CD в VirtualBox или флешка, залитая ISO'шником) — только чтение.
 # Держим read-only, на запись перемонтируемся только в момент сохранения (см. tc-menu).
+try_mount() {
+    for dev in /dev/sd[a-z]1 /dev/sd[a-z] /dev/mmcblk[0-9]p1 /dev/sr[0-9]; do
+        [ -b "$dev" ] || continue
+        for fs in vfat iso9660; do
+            if mount -t "$fs" -o ro "$dev" /mnt/flash 2>/dev/null; then
+                if [ -f /mnt/flash/servers.conf ]; then
+                    return 0
+                fi
+                umount /mnt/flash
+            fi
+        done
+    done
+    return 1
+}
+
 case "$1" in
     start)
         mkdir -p /mnt/flash
         # ждём, пока ядро увидит USB-накопитель (на старых EHCI бывает не мгновенно)
         for i in 1 2 3 4 5 6 7 8 9 10; do
-            for dev in /dev/sd[a-z]1 /dev/mmcblk[0-9]p1; do
-                [ -b "$dev" ] || continue
-                if mount -t vfat -o ro "$dev" /mnt/flash 2>/dev/null; then
-                    if [ -f /mnt/flash/syslinux.cfg ]; then
-                        exit 0
-                    fi
-                    umount /mnt/flash
-                fi
-            done
+            try_mount && exit 0
             sleep 1
         done
-        echo "S50flash: флешка с конфигом не найдена" >&2
+        echo "S50flash: носитель с servers.conf не найден" >&2
         ;;
     stop)
         umount /mnt/flash 2>/dev/null

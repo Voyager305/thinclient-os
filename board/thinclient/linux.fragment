@@ -28,7 +28,13 @@ CONFIG_VFAT_FS=y
 CONFIG_NLS_CODEPAGE_437=y
 CONFIG_NLS_ISO8859_1=y
 
-# Сетевухи, которые обычно стоят в атомных тонких клиентах/неттопах
+# Загрузка с ISO (тест в VirtualBox: ISO подключается как CD)
+CONFIG_ISO9660_FS=y
+CONFIG_BLK_DEV_SR=y
+
+# Сетевухи, которые обычно стоят в атомных тонких клиентах/неттопах.
+# E1000 и PCNET32 — заодно покрывают виртуалки (VirtualBox/QEMU).
+CONFIG_E1000=y
 CONFIG_E1000E=y
 CONFIG_E100=y
 CONFIG_R8169=y
@@ -36,6 +42,7 @@ CONFIG_8139TOO=y
 CONFIG_ATL1C=y
 CONFIG_ATL1E=y
 CONFIG_SKY2=y
+CONFIG_PCNET32=y
 
 # Ввод для X
 CONFIG_INPUT_EVDEV=y

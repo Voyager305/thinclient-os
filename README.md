@@ -43,15 +43,15 @@ Xorg (поднимается только на время сессии) → Free
 # Debian / Ubuntu
 sudo apt install build-essential bc bzip2 cpio file git libncurses-dev \
     make patch perl python3 rsync unzip wget \
-    dosfstools mtools parted syslinux syslinux-common
+    dosfstools mtools parted syslinux syslinux-common isolinux xorriso
 
-# Fedora
+# Fedora (isolinux входит в пакет syslinux)
 sudo dnf install gcc gcc-c++ make bc bzip2 cpio file git ncurses-devel \
-    patch perl python3 rsync unzip wget dosfstools mtools parted syslinux
+    patch perl python3 rsync unzip wget dosfstools mtools parted syslinux xorriso
 
-# Arch
+# Arch (isolinux входит в пакет syslinux)
 sudo pacman -S --needed base-devel bc cpio file git ncurses rsync unzip wget \
-    dosfstools mtools parted syslinux
+    dosfstools mtools parted syslinux xorriso
 ```
 
 Руками, без build.sh, это ровно две команды в каталоге buildroot:
@@ -90,11 +90,27 @@ diskutil list                # найти флешку, например /dev/di
 
 ## Проверка без железа
 
+Сборка делает два артефакта в `buildroot/output/images/`:
+
+- `usb.img` — боевой образ для флешки (FAT32, список серверов пишется);
+- `thinclient.iso` — hybrid ISO для тестов: VirtualBox подключает его как
+  CD-привод напрямую, balenaEtcher пишет на флешку как есть. Файловая
+  система ISO только для чтения — добавленные через меню серверы не
+  сохраняются; постоянный список для ISO зашивается пересборкой
+  (`servers.conf.sample`).
+
+VirtualBox: VM «Other Linux (32-bit)», RAM 1024 МБ, EFI выключен,
+`thinclient.iso` — в CD-привод. Сеть работает из коробки (драйверы e1000 и
+pcnet32 включены). Для проверки RDP-сессии выбери графический контроллер
+VBoxVGA и добавь `vga=791` в строку APPEND (framebuffer для X).
+
+QEMU:
+
 ```sh
+qemu-system-i386 -m 1024 -cdrom buildroot/output/images/thinclient.iso
+# или боевой образ:
 qemu-system-i386 -m 1024 -drive format=raw,file=buildroot/output/images/usb.img
 ```
-
-Меню должно появиться; RDP проверяется уже с реальной сетью.
 
 ## Настройка на клиенте
 

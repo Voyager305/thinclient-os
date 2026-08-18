@@ -36,3 +36,41 @@ dd if="$PART" of="$IMG" bs=1M seek=1 conv=notrunc status=none
 rm -f "$PART"
 
 echo ">>> Готово: $IMG ($(du -h "$IMG" | cut -f1))"
+
+# 5. Hybrid ISO — для теста в VirtualBox (подключается как CD) и для записи
+#    через balenaEtcher. Файловая система ISO только для чтения: добавленные
+#    через меню серверы не сохраняются, постоянный список — servers.conf.sample.
+ISOLINUX_BIN=""
+for p in /usr/lib/ISOLINUX/isolinux.bin /usr/share/syslinux/isolinux.bin /usr/lib/syslinux/bios/isolinux.bin; do
+    [ -f "$p" ] && ISOLINUX_BIN="$p" && break
+done
+ISOHDPFX=""
+for p in /usr/lib/ISOLINUX/isohdpfx.bin /usr/share/syslinux/isohdpfx.bin /usr/lib/syslinux/bios/isohdpfx.bin; do
+    [ -f "$p" ] && ISOHDPFX="$p" && break
+done
+LDLINUX=""
+for p in /usr/lib/syslinux/modules/bios/ldlinux.c32 /usr/share/syslinux/ldlinux.c32 /usr/lib/syslinux/bios/ldlinux.c32; do
+    [ -f "$p" ] && LDLINUX="$p" && break
+done
+
+if command -v xorriso >/dev/null 2>&1 && [ -n "$ISOLINUX_BIN" ] && [ -n "$ISOHDPFX" ]; then
+    ISO="$BINARIES_DIR/thinclient.iso"
+    ISO_DIR="$BINARIES_DIR/iso-root"
+    rm -rf "$ISO_DIR"
+    mkdir -p "$ISO_DIR/isolinux"
+    cp "$BINARIES_DIR/bzImage"          "$ISO_DIR/bzImage"
+    cp "$BINARIES_DIR/rootfs.cpio.gz"   "$ISO_DIR/initrd.gz"
+    cp "$BOARD_DIR/servers.conf.sample" "$ISO_DIR/servers.conf"
+    cp "$BOARD_DIR/syslinux.cfg"        "$ISO_DIR/isolinux/isolinux.cfg"
+    cp "$ISOLINUX_BIN"                  "$ISO_DIR/isolinux/"
+    [ -n "$LDLINUX" ] && cp "$LDLINUX"  "$ISO_DIR/isolinux/"
+    xorriso -as mkisofs -quiet -o "$ISO" \
+        -isohybrid-mbr "$ISOHDPFX" \
+        -b isolinux/isolinux.bin -c isolinux/boot.cat \
+        -no-emul-boot -boot-load-size 4 -boot-info-table \
+        -V THINCLIENT "$ISO_DIR"
+    rm -rf "$ISO_DIR"
+    echo ">>> Готово: $ISO ($(du -h "$ISO" | cut -f1))"
+else
+    echo ">>> ISO пропущен: нужны xorriso и isolinux (см. README)" >&2
+fi
