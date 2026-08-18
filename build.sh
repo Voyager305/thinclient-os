@@ -63,8 +63,18 @@ case "$1" in
         ;;
     *)
         run "make BR2_EXTERNAL=$EXT thinclient_defconfig && make"
+        # На arm64-хосте (Apple Silicon) post-image пропускает usb.img: утилита
+        # syslinux бывает только под x86. Дособираем секундным amd64-шагом (Rosetta).
+        if [ "$MODE" = docker ] && [ ! -f buildroot/output/images/usb.img ]; then
+            echo ">>> Дособираю usb.img в amd64-контейнере..."
+            docker build --platform linux/amd64 -t "$IMAGE-amd64" .
+            TTY_FLAG=""; [ -t 0 ] && TTY_FLAG="-it"
+            docker run --rm $TTY_FLAG --platform linux/amd64 -v "$PWD:/src" \
+                -e BINARIES_DIR=/src/buildroot/output/images \
+                "$IMAGE-amd64" /src/board/thinclient/post-image.sh
+        fi
         echo ""
-        echo ">>> Образ флешки: buildroot/output/images/usb.img"
-        echo ">>> Залить: ./flash-usb.sh <устройство>  (macOS: /dev/diskN, Linux: /dev/sdX)"
+        echo ">>> Образы: buildroot/output/images/usb.img (флешка) и thinclient.iso (VirtualBox/Etcher)"
+        echo ">>> Залить img: ./flash-usb.sh <устройство>  (macOS: /dev/diskN, Linux: /dev/sdX)"
         ;;
 esac
