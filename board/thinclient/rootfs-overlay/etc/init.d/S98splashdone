@@ -1,0 +1,8 @@
+#!/bin/sh
+# Последний шаг rcS: добить прогресс и убрать заставку — дальше меню.
+case "$1" in
+    start)
+        psplash-write "PROGRESS 100" 2>/dev/null
+        psplash-write "QUIT" 2>/dev/null
+        ;;
+esac

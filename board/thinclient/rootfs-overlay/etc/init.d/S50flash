@@ -23,7 +23,10 @@ case "$1" in
         mkdir -p /mnt/flash
         # ждём, пока ядро увидит USB-накопитель (на старых EHCI бывает не мгновенно)
         for i in 1 2 3 4 5 6 7 8 9 10; do
-            try_mount && exit 0
+            if try_mount; then
+                psplash-write "PROGRESS 85" 2>/dev/null
+                exit 0
+            fi
             sleep 1
         done
         echo "S50flash: носитель с servers.conf не найден" >&2

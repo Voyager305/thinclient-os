@@ -35,6 +35,9 @@ BR2_PACKAGE_XAPP_XAUTH=y
 BR2_PACKAGE_FREERDP=y
 BR2_PACKAGE_FREERDP_CLIENT_X11=y
 
+# Заставка с прогресс-баром на загрузке (рисует прямо в framebuffer)
+BR2_PACKAGE_PSPLASH=y
+
 # Консольное меню: dialog + ncurses с UTF-8, kbd — консольные шрифты с кириллицей
 BR2_PACKAGE_DIALOG=y
 BR2_PACKAGE_NCURSES_WCHAR=y
