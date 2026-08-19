@@ -7,18 +7,17 @@ CONF=/mnt/flash/servers.conf
 PASS_FILE=/mnt/flash/shell.pass
 export TERM=linux
 export DIALOGRC=/etc/dialogrc
+# UTF-8, иначе ncurses печатает кириллицу мусором
+export LANG=C.UTF-8
+export LC_ALL=C.UTF-8
 
-LOGO=$(cat <<'EOF'
- _____  _  _  ___  _  _     ___  _     ___  ___  _  _  _____
-|_   _|| || ||_ _|| \| |   / __|| |   |_ _|| __|| \| ||_   _|
-  | |  | __ | | | | .` |  | (__ | |__  | | | _| | .` |  | |
-  |_|  |_||_||___||_|\_|   \___||____||___||___||_|\_|  |_|
-EOF
-)
-LOGO_W=66
+# ASCII-логотип лежит отдельным файлом: внутри арта есть скобки/бэкслэши,
+# которые ломают heredoc в $() у старых шеллов
+LOGO=$(cat /etc/tc-logo 2>/dev/null)
+LOGO_W=34
 LOGO_H=6
 MENU_W=64
-BACKTITLE="Thin client"
+BACKTITLE="MCBU"
 
 save_server() {
     mount -o remount,rw /mnt/flash 2>/dev/null
@@ -57,8 +56,12 @@ open_shell() {
         fi
     fi
     clear
-    echo "=== Консоль Linux (root). Выход в меню: exit или Ctrl-D ==="
-    /bin/sh -l
+    echo "=== Консоль (root). Выход в меню: exit или Ctrl-D ==="
+    if [ -x /bin/bash ]; then
+        /bin/bash -l
+    else
+        /bin/sh -l
+    fi
 }
 
 connect() {
@@ -77,7 +80,7 @@ while true; do
             ip=$(echo "$ip" | tr -d '\r')
             case "$name" in ''|'#'*) continue ;; esac
             [ -n "$ip" ] || continue
-            set -- "$@" "$ip" "$(printf '%-32s \Z6%s\Zn' "$name" "$ip")"
+            set -- "$@" "$ip" "$(printf '%-34s %s' "$name" "$ip")"
         done < "$CONF"
     fi
 
@@ -98,17 +101,17 @@ while true; do
     logo_y=$(( (rows - LOGO_H - menu_h) / 2 )); [ "$logo_y" -lt 1 ] && logo_y=1
     menu_y=$(( logo_y + LOGO_H ))
 
-    choice=$(dialog --backtitle "$BACKTITLE" --colors --keep-window \
+    choice=$(dialog --backtitle "$BACKTITLE" --keep-window \
         --begin "$logo_y" "$logo_x" --infobox "$LOGO" $LOGO_H $LOGO_W \
-        --and-widget --backtitle "$BACKTITLE" --colors --no-cancel --no-tags \
+        --and-widget --backtitle "$BACKTITLE" --no-cancel --no-tags \
         --begin "$menu_y" "$menu_x" --title " Выбор сервера " \
         --ok-label "Выбрать" \
         --menu "" "$menu_h" $MENU_W "$list_h" \
         "$@" \
-        "ADD"    "\Z6[+]\Zn  Добавить сервер" \
-        "SHELL"  "\Z3[>]\Zn  Консоль Linux" \
-        "REBOOT" "\Z1[r]\Zn  Перезагрузка" \
-        "OFF"    "\Z1[o]\Zn  Выключение" \
+        "ADD"    "[+] Добавить сервер" \
+        "SHELL"  "[>] Консоль Linux" \
+        "REBOOT" "[r] Перезагрузка" \
+        "OFF"    "[o] Выключение" \
         3>&1 1>&2 2>&3)
 
     case "$choice" in

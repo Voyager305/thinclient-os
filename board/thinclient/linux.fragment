@@ -28,9 +28,19 @@ CONFIG_VFAT_FS=y
 CONFIG_NLS_CODEPAGE_437=y
 CONFIG_NLS_ISO8859_1=y
 
-# Загрузка с ISO (тест в VirtualBox: ISO подключается как CD)
+# Загрузка с ISO (тест в виртуалке: ISO подключается как CD)
 CONFIG_ISO9660_FS=y
 CONFIG_BLK_DEV_SR=y
+
+# Виртуальные GPU (UTM/QEMU/VirtualBox): KMS-framebuffer высокого разрешения
+# вместо текстового режима 80x25 — консоль чётче, X работает без vga=-хаков
+CONFIG_DRM_BOCHS=y
+CONFIG_DRM_CIRRUS_QEMU=y
+CONFIG_DRM_VMWGFX=y
+CONFIG_VIRTIO_MENU=y
+CONFIG_VIRTIO_PCI=y
+CONFIG_DRM_VIRTIO_GPU=y
+CONFIG_VIRTIO_NET=y
 
 # Сетевухи, которые обычно стоят в атомных тонких клиентах/неттопах.
 # E1000 и PCNET32 — заодно покрывают виртуалки (VirtualBox/QEMU).
