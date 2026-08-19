@@ -24,10 +24,12 @@ gen_efi() {
     mkdir -p "$EFI_DIR"
     [ -d /usr/lib/grub/x86_64-efi ] && grub-mkstandalone -O x86_64-efi \
         --install-modules="$EFI_MODULES" \
+        --locales="" --fonts="" --themes="" \
         -o "$EFI_DIR/bootx64.efi" \
         "boot/grub/grub.cfg=$BOARD_DIR/grub-efi.cfg" 2>/dev/null
     [ -d /usr/lib/grub/i386-efi ] && grub-mkstandalone -O i386-efi \
         --install-modules="$EFI_MODULES" \
+        --locales="" --fonts="" --themes="" \
         -o "$EFI_DIR/bootia32.efi" \
         "boot/grub/grub.cfg=$BOARD_DIR/grub-efi.cfg" 2>/dev/null
     [ -f "$EFI_DIR/bootx64.efi" ] || [ -f "$EFI_DIR/bootia32.efi" ]
