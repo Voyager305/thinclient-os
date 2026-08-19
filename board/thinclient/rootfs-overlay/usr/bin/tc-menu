@@ -61,11 +61,16 @@ open_shell() {
     fi
     clear
     echo "=== Linux console (root). Back to menu: exit or Ctrl-D ==="
+    # HOME обязателен: без него bash -l не найдёт /root/.bash_profile
+    # и останется с голым PS1='# ' из скелетного /etc/profile
+    export HOME=/root
+    cd /root
     if [ -x /bin/bash ]; then
         /bin/bash -l
     else
         /bin/sh -l
     fi
+    cd /
 }
 
 connect() {
