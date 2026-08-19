@@ -1,1 +1,1 @@
-# Здесь можно подключать собственные пакеты (package/*/*.mk), пока пусто.
+include $(sort $(wildcard $(BR2_EXTERNAL_THINCLIENT_PATH)/package/*/*.mk))

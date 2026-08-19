@@ -1,64 +1,47 @@
 #!/bin/sh
-# Главное меню тонкого клиента. Крутится на tty1 вместо getty (см. /etc/inittab).
-# Список серверов — /mnt/flash/servers.conf (FAT-раздел флешки), формат: имя;ip
-# Тема оформления — /etc/dialogrc. UI на английском: кириллица в текстовой
-# консоли рендерится ненадёжно (локали в минимальном glibc), ASCII — везде ровно.
-#
-# Раскладка: окно на весь экран, серверы и Add server — в списке,
-# сервисные действия — кнопками внизу: Connect | Console | Reboot | Power off.
+# Обёртка вокруг tc-launcher (ncurses-интерфейс). Крутится на tty1 вместо
+# getty (см. /etc/inittab): лаунчер рисует UI и пишет выбор в /tmp/tc-choice,
+# здесь выбор исполняется — RDP-сессия, консоль, запись сервера, питание.
 
 CONF=/mnt/flash/servers.conf
 PASS_FILE=/mnt/flash/shell.pass
+OUT=/tmp/tc-choice
 export TERM=linux
-export DIALOGRC=/etc/dialogrc
-
-MENU_W=64
-
-# верхняя строка: MCBU | tc-<mac> | <ip>; обновляется при каждой перерисовке
-update_backtitle() {
-    ipaddr=$(ip -4 -o addr show scope global 2>/dev/null \
-        | awk 'NR==1{sub("/.*","",$4); print $4}')
-    # сети ещё нет — пробуем поднять (интерфейс мог появиться позже загрузки)
-    [ -z "$ipaddr" ] && /usr/bin/tc-netup 2>/dev/null
-    BACKTITLE="MCBU | $(hostname) | ${ipaddr:-no ip}"
-}
 
 save_server() {
     mount -o remount,rw /mnt/flash 2>/dev/null
     if printf '%s;%s\r\n' "$1" "$2" >> "$CONF" 2>/dev/null; then
         sync
     else
-        # ISO-носитель: файловая система только для чтения
-        dialog --backtitle "$BACKTITLE" --title " Error " --msgbox \
-            "Cannot save: read-only media (ISO image).\nPersistent server list needs the usb.img build." 8 56
+        clear
+        echo "Cannot save: read-only media (ISO image)."
+        echo "Persistent server list needs the usb.img build."
+        sleep 2
     fi
     mount -o remount,ro /mnt/flash 2>/dev/null
 }
 
-add_server() {
-    name=$(dialog --backtitle "$BACKTITLE" --title " New server " \
-        --inputbox "Server name:" 9 50 3>&1 1>&2 2>&3) || return
-    [ -n "$name" ] || return
-    ip=$(dialog --backtitle "$BACKTITLE" --title " New server " \
-        --inputbox "IP address (ip or ip:port):" 9 50 3>&1 1>&2 2>&3) || return
-    [ -n "$ip" ] || return
-    save_server "$name" "$ip"
+# Если на флешке лежит shell.pass (sha256 от пароля) — спрашиваем пароль.
+# Создать: printf '%s' 'пароль' | sha256sum  -> первые 64 символа в файл.
+check_pass() {
+    [ -f "$PASS_FILE" ] || return 0
+    clear
+    printf "Password: "
+    stty -echo
+    read -r try
+    stty echo
+    printf "\n"
+    hash=$(printf '%s' "$try" | sha256sum | cut -c1-64)
+    stored=$(tr -d ' \t\r\n' < "$PASS_FILE")
+    if [ "$hash" != "$stored" ]; then
+        echo "Wrong password"
+        sleep 1
+        return 1
+    fi
 }
 
 open_shell() {
-    # Если на флешке лежит shell.pass (sha256 от пароля) — спрашиваем пароль.
-    # Создать: printf '%s' 'пароль' | sha256sum  -> первые 64 символа в файл.
-    if [ -f "$PASS_FILE" ]; then
-        try=$(dialog --backtitle "$BACKTITLE" --title " Console " --insecure \
-            --passwordbox "Password:" 9 40 3>&1 1>&2 2>&3) || return
-        hash=$(printf '%s' "$try" | sha256sum | cut -c1-64)
-        stored=$(tr -d ' \t\r\n' < "$PASS_FILE")
-        if [ "$hash" != "$stored" ]; then
-            dialog --backtitle "$BACKTITLE" --title " Console " \
-                --msgbox "Wrong password" 6 30
-            return
-        fi
-    fi
+    check_pass || return
     clear
     echo "=== Linux console (root). Back to menu: exit or Ctrl-D ==="
     # HOME обязателен: без него bash -l не найдёт /root/.bash_profile
@@ -81,53 +64,35 @@ connect() {
 }
 
 while true; do
-    update_backtitle
+    # сеть могла появиться позже загрузки — лаунчер покажет ip, как только он есть
+    ip -4 -o addr show scope global 2>/dev/null | grep -q . || /usr/bin/tc-netup 2>/dev/null
 
-    # пункты: тег = ip (скрыт через --no-tags), подпись = имя + ip
-    set --
-    if [ -f "$CONF" ]; then
-        while IFS=';' read -r name ip; do
-            name=$(echo "$name" | tr -d '\r')
-            ip=$(echo "$ip" | tr -d '\r')
-            case "$name" in ''|'#'*) continue ;; esac
-            [ -n "$ip" ] || continue
-            set -- "$@" "$ip" "$(printf '%-34s %s' "$name" "$ip")"
-        done < "$CONF"
-    fi
-    set -- "$@" "ADD" "[+] Add server"
+    rm -f "$OUT"
+    /usr/bin/tc-launcher
+    action=$(cat "$OUT" 2>/dev/null)
 
-    # окно на весь экран: кнопки действий оказываются внизу экрана
-    size=$(stty size 2>/dev/null)
-    rows=${size%% *}; cols=${size##* }
-    [ "$rows" -ge 24 ] 2>/dev/null || rows=25
-    [ "$cols" -ge 80 ] 2>/dev/null || cols=80
-
-    menu_h=$(( rows - 2 ))
-    list_h=$(( menu_h - 8 ))
-    menu_x=$(( (cols - MENU_W) / 2 )); [ "$menu_x" -lt 0 ] && menu_x=0
-
-    choice=$(dialog --backtitle "$BACKTITLE" --no-tags \
-        --begin 1 "$menu_x" --title " Select server " \
-        --ok-label "Connect" \
-        --extra-button --extra-label "Console" \
-        --help-button --help-label "Reboot" \
-        --cancel-label "Power off" \
-        --menu "" "$menu_h" $MENU_W "$list_h" \
-        "$@" \
-        3>&1 1>&2 2>&3)
-    rc=$?
-
-    case "$rc" in
-        0)  # Connect
-            case "$choice" in
-                ADD) add_server ;;
-                "")  ;;
-                *)   connect "$choice" ;;
-            esac
+    case "$action" in
+        CONNECT\ *)
+            connect "${action#CONNECT }"
             ;;
-        3)  open_shell ;;   # Console (extra)
-        2)  reboot ;;       # Reboot (help)
-        1)  poweroff ;;     # Power off (cancel)
-        *)  ;;              # ESC — перерисовать
+        ADD\ *)
+            entry=${action#ADD }
+            name=${entry%%;*}
+            addr=${entry#*;}
+            [ -n "$name" ] && [ -n "$addr" ] && save_server "$name" "$addr"
+            ;;
+        SHELL)
+            open_shell
+            ;;
+        REBOOT)
+            reboot
+            ;;
+        OFF)
+            poweroff
+            ;;
+        *)
+            # лаунчер умер без выбора — не крутить respawn бешено
+            sleep 1
+            ;;
     esac
 done

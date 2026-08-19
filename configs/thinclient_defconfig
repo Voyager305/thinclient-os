@@ -42,7 +42,8 @@ BR2_GLOBAL_PATCH_DIR="$(BR2_EXTERNAL_THINCLIENT_PATH)/patches"
 # Заставка с прогресс-баром на загрузке (рисует прямо в framebuffer)
 BR2_PACKAGE_PSPLASH=y
 
-# Консольное меню: dialog + ncurses с UTF-8, kbd — консольные шрифты с кириллицей
+# Консольное меню: свой ncurses-лаунчер; kbd — консольные шрифты
+BR2_PACKAGE_TC_LAUNCHER=y
 BR2_PACKAGE_DIALOG=y
 BR2_PACKAGE_NCURSES_WCHAR=y
 BR2_PACKAGE_KBD=y

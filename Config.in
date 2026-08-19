@@ -1,1 +1,1 @@
-# Здесь можно подключать Config.in собственных пакетов, пока пусто.
+source "$BR2_EXTERNAL_THINCLIENT_PATH/package/tc-launcher/Config.in"
