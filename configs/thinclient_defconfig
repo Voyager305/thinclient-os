@@ -35,6 +35,10 @@ BR2_PACKAGE_XAPP_XAUTH=y
 BR2_PACKAGE_FREERDP=y
 BR2_PACKAGE_FREERDP_CLIENT_X11=y
 
+# Свои патчи пакетов (patches/<пакет>/*.patch), сейчас там только psplash:
+# тёмная тема + убран логотип poky
+BR2_GLOBAL_PATCH_DIR="$(BR2_EXTERNAL_THINCLIENT_PATH)/patches"
+
 # Заставка с прогресс-баром на загрузке (рисует прямо в framebuffer)
 BR2_PACKAGE_PSPLASH=y
 
