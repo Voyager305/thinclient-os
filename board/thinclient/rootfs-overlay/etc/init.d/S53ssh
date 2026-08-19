@@ -1,0 +1,40 @@
+#!/bin/sh
+# SSH (dropbear) — запускаем ПОСЛЕ S50flash/S51network, с host-key на флешке,
+# чтобы ключ переживал перезагрузку (иначе клиент ругается «host key changed»
+# на каждый коннект — привыкаешь жать yes, и настоящий MITM неотличим).
+# Скелетный S50dropbear убран в post-build.sh.
+KD=/mnt/flash/dropbear
+DB=/usr/sbin/dropbear
+KG=/usr/bin/dropbearkey
+
+case "$1" in
+    start)
+        # host-key на флешке (генерим при первой загрузке; носитель ro → пропуск)
+        if mount -o remount,rw /mnt/flash 2>/dev/null; then
+            mkdir -p "$KD"
+            [ -f "$KD/rsa" ]   || "$KG" -t rsa   -f "$KD/rsa"   >/dev/null 2>&1
+            [ -f "$KD/ecdsa" ] || "$KG" -t ecdsa -f "$KD/ecdsa" >/dev/null 2>&1
+            sync
+            mount -o remount,ro /mnt/flash 2>/dev/null
+        fi
+
+        # опц. вход по ключу: authorized_keys с флешки
+        if [ -f /mnt/flash/authorized_keys ]; then
+            mkdir -p /root/.ssh
+            cp /mnt/flash/authorized_keys /root/.ssh/authorized_keys
+            chmod 700 /root/.ssh
+            chmod 600 /root/.ssh/authorized_keys
+        fi
+
+        printf "Starting dropbear sshd: "
+        if [ -f "$KD/rsa" ] && [ -f "$KD/ecdsa" ]; then
+            "$DB" -r "$KD/rsa" -r "$KD/ecdsa" 2>/dev/null   # персистентные ключи
+        else
+            "$DB" -R 2>/dev/null                             # ro-носитель → ключ в RAM
+        fi
+        [ $? = 0 ] && echo "OK" || echo "FAIL"
+        ;;
+    stop)
+        killall dropbear 2>/dev/null
+        ;;
+esac

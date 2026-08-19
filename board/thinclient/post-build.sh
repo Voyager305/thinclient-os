@@ -19,3 +19,7 @@ rm -f "$TARGET_DIR/etc/init.d/S40network"
 # dialog больше не используется (UI на tc-launcher) — чистим бинарь и конфиг,
 # если остались от прошлой сборки с BR2_PACKAGE_DIALOG=y
 rm -f "$TARGET_DIR/usr/bin/dialog" "$TARGET_DIR/etc/dialogrc"
+
+# SSH переехал на S53ssh (после флешки, host-key персистится на TCDATA).
+# Убираем скелетный dropbear-автостарт, иначе стартует рано с ключом в RAM.
+rm -f "$TARGET_DIR/etc/init.d/S50dropbear"

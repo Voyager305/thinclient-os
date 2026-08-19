@@ -11,6 +11,15 @@ case "$1" in
         # NTP. Нужен для NLA/Kerberos — при кривых часах RDP-логин падает.
         NTP=$(/usr/bin/tc-getconf NTP_SERVER)
         [ -n "$NTP" ] && ntpd -p "$NTP" 2>/dev/null
+
+        # Durable root-пароль: хэш ($6$…) в /mnt/flash/root.pass → в /etc/shadow.
+        # Система в RAM, поэтому `passwd` эфемерен; этот файл переживает ребут.
+        # Хэш: openssl passwd -6  ИЛИ  mkpasswd -m sha-512
+        PWH=$(head -1 /mnt/flash/root.pass 2>/dev/null | tr -d ' \r\n')
+        if [ -n "$PWH" ]; then
+            echo "root:$PWH" | chpasswd -e 2>/dev/null || \
+                sed -i "s|^root:[^:]*:|root:$PWH:|" /etc/shadow 2>/dev/null
+        fi
         ;;
     stop)
         killall ntpd 2>/dev/null
