@@ -114,8 +114,8 @@ static void write_choice(const char *fmt, const char *arg1, const char *arg2)
 /* сервисные кнопки — вертикальным столбиком внизу. Console показывается
  * всегда; пароль на неё (опционально) ставит админ файлом shell.pass —
  * проверку делает tc-menu. */
-#define NBAR 3
-static const char *bar_label[NBAR] = { " Console ", " Reboot ", " PowerOff " };
+#define NBAR 4
+static const char *bar_label[NBAR] = { " Console ", " Diag ", " Reboot ", " PowerOff " };
 static int nbar = NBAR;   /* 0 в режиме управления серверами */
 static int manage = 0;    /* 1 = экран «Manage servers» (add/edit/delete) */
 
@@ -328,7 +328,7 @@ static int do_delete(int i)
 
 static void bar_action(int bsel)
 {
-    static const char *act[NBAR] = { "SHELL", "REBOOT", "POWEROFF" };
+    static const char *act[NBAR] = { "SHELL", "DIAG", "REBOOT", "POWEROFF" };
 
     endwin();
     write_choice(act[bsel], NULL, NULL);
@@ -432,7 +432,7 @@ int main(int argc, char **argv)
                 return 0;
             }
             break;
-        /* F-клавиши: сервис (только main) */
+        /* F-клавиши: сервис (только main): Console/Diag/Reboot/PowerOff */
         case KEY_F(3):
             if (!manage) { bar_action(0); return 0; }
             break;
@@ -441,6 +441,9 @@ int main(int argc, char **argv)
             break;
         case KEY_F(5):
             if (!manage) { bar_action(2); return 0; }
+            break;
+        case KEY_F(6):
+            if (!manage) { bar_action(3); return 0; }
             break;
         default:
             break;
