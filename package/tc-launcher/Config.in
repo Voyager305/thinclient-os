@@ -2,6 +2,6 @@ config BR2_PACKAGE_TC_LAUNCHER
 	bool "tc-launcher"
 	select BR2_PACKAGE_NCURSES
 	help
-	  Console launcher UI for the MCBU thin client: centered server
+	  Console launcher UI for the thin client: centered server
 	  list, htop-style action bar. Writes the chosen action to
 	  /tmp/tc-choice; the tc-menu wrapper executes it.
