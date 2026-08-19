@@ -5,11 +5,22 @@
 #   /dynamic-resolution  — сессия подстраивается при смене разрешения
 #   /printer             — проброс принтеров клиента (CUPS) в сессию
 #   /bpp:16 разгружает старые Атомы; убери, если нужна полная цветность.
+# tc.conf на флешке может предзаполнить логин/домен (/u: /d:) и добавить
+# любые флаги (RDP_EXTRA). Пароль пользователь вводит сам.
 # Код выхода xfreerdp уходит в /tmp/rdp-status — по нему tc-menu понимает,
 # что подключение не удалось, и показывает экран ошибки.
 
-xfreerdp /f /v:"$1" /cert:ignore /bpp:16 +clipboard \
-    /dynamic-resolution /printer
+SRV="$1"
+RDP_USER=$(/usr/bin/tc-getconf RDP_USER)
+RDP_DOMAIN=$(/usr/bin/tc-getconf RDP_DOMAIN)
+RDP_EXTRA=$(/usr/bin/tc-getconf RDP_EXTRA)
+
+set -- /f /v:"$SRV" /cert:ignore /bpp:16 +clipboard /dynamic-resolution /printer
+[ -n "$RDP_USER" ]   && set -- "$@" /u:"$RDP_USER"
+[ -n "$RDP_DOMAIN" ] && set -- "$@" /d:"$RDP_DOMAIN"
+
+# RDP_EXTRA намеренно без кавычек — это набор доп. флагов из tc.conf
+xfreerdp "$@" $RDP_EXTRA
 rc=$?
 echo "$rc" > /tmp/rdp-status
 exit "$rc"

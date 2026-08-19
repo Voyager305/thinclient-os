@@ -108,6 +108,18 @@ while true; do
     # сеть могла появиться позже загрузки — лаунчер покажет ip, как только он есть
     ip -4 -o addr show scope global 2>/dev/null | grep -q . || /usr/bin/tc-netup 2>/dev/null
 
+    # киоск: автоподключение ОДИН раз за загрузку (tc.conf AUTOCONNECT).
+    # Флаг ставим до connect — если сервер недоступен, показываем меню,
+    # а не зацикливаемся на автоконнекте (админ должен добраться до меню).
+    if [ ! -f /tmp/tc-autodone ]; then
+        : > /tmp/tc-autodone
+        auto=$(/usr/bin/tc-getconf AUTOCONNECT)
+        if [ -n "$auto" ]; then
+            connect "$auto"
+            continue
+        fi
+    fi
+
     rm -f "$OUT"
     /usr/bin/tc-launcher
     action=$(cat "$OUT" 2>/dev/null)

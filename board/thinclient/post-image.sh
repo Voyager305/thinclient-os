@@ -67,6 +67,7 @@ build_img() {
     mcopy -i "$PART" "$BINARIES_DIR/rootfs.cpio.gz"   ::/initrd.gz
     mcopy -i "$PART" "$BOARD_DIR/syslinux.cfg"        ::/syslinux.cfg
     mcopy -i "$PART" "$BOARD_DIR/servers.conf.sample" ::/servers.conf
+    mcopy -i "$PART" "$BOARD_DIR/tc.conf.sample"      ::/tc.conf.sample
     add_efi_to_fat "$PART"
     syslinux --install "$PART"
 
@@ -116,6 +117,7 @@ build_iso() {
     cp "$BINARIES_DIR/bzImage"          "$ISO_DIR/bzImage"
     cp "$BINARIES_DIR/rootfs.cpio.gz"   "$ISO_DIR/initrd.gz"
     cp "$BOARD_DIR/servers.conf.sample" "$ISO_DIR/servers.conf"
+    cp "$BOARD_DIR/tc.conf.sample"      "$ISO_DIR/tc.conf.sample"
     cp "$BOARD_DIR/syslinux.cfg"        "$ISO_DIR/isolinux/isolinux.cfg"
     cp "$ISOLINUX_BIN"                  "$ISO_DIR/isolinux/"
     [ -n "$LDLINUX" ] && cp "$LDLINUX"  "$ISO_DIR/isolinux/"
