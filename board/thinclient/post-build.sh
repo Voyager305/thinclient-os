@@ -6,3 +6,7 @@ set -e
 # У нас X живёт только внутри RDP-сессии (xinit из tc-menu) — убираем,
 # иначе пустой X перехватывает экран и меню на tty1 не видно.
 rm -f "$TARGET_DIR/etc/init.d/S40xorg"
+
+# Хвост от переименования S40dhcp -> S40network: overlay не удаляет
+# из target файлы, которые из него исчезли
+rm -f "$TARGET_DIR/etc/init.d/S40dhcp"
