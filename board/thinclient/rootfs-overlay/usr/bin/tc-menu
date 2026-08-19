@@ -99,7 +99,7 @@ open_shell() {
     cd /
 }
 
-connect() {
+run_session() {   # $1 = сервер; код возврата = rc сессии (255 = X не поднялся)
     clear
     echo "Connecting to $1 ..."
     rm -f /tmp/rdp-status
@@ -107,14 +107,39 @@ connect() {
     xinit /usr/bin/tc-session "$1" -- -nolisten tcp >/var/log/xsession.log 2>&1
     # если X умер грязно и оставил VT в графическом режиме — вернуть консоль
     chvt 1 2>/dev/null
-
     rc=$(cat /tmp/rdp-status 2>/dev/null)
-    if [ -z "$rc" ]; then
-        # до xfreerdp дело не дошло — не поднялся сам X
+    [ -n "$rc" ] || rc=255
+    return "$rc"
+}
+
+connect() {   # ручное подключение из меню: при провале — экран ошибки
+    run_session "$1"
+    rc=$?
+    if [ "$rc" = 255 ]; then
         connect_error "$1" "X server failed to start"
     elif [ "$rc" != 0 ]; then
         connect_error "$1" "xfreerdp exited with code $rc"
     fi
+}
+
+# Киоск-failover: AUTOCONNECT может быть списком через запятую. Пробуем по
+# порядку до первой НОРМАЛЬНО завершившейся сессии (rc 0 = пользователь
+# вышел сам). Если ни один не поднялся — один экран ошибки.
+autoconnect_list() {
+    last=""
+    OLDIFS=$IFS
+    IFS=,
+    for srv in $1; do
+        IFS=$OLDIFS
+        srv=$(printf '%s' "$srv" | tr -d ' \t\r')
+        [ -n "$srv" ] || { IFS=,; continue; }
+        last="$srv"
+        run_session "$srv" && return 0
+        IFS=,
+    done
+    IFS=$OLDIFS
+    [ -n "$last" ] && connect_error "$last" "autoconnect: no server reachable"
+    return 1
 }
 
 connect_error() {
@@ -175,7 +200,7 @@ while true; do
         : > /tmp/tc-autodone
         auto=$(/usr/bin/tc-getconf AUTOCONNECT)
         if [ -n "$auto" ]; then
-            connect "$auto"
+            autoconnect_list "$auto"
             continue
         fi
     fi
