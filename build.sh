@@ -56,7 +56,8 @@ docker_run() {
     # иначе configure некоторых host-пакетов (tar) отказывается работать.
     # DOCKER_RUN_EXTRA — дополнительные флаги docker run снаружи,
     # например DOCKER_RUN_EXTRA="--cpuset-cpus 0-7" чтобы умерить параллелизм.
-    docker run --rm $TTY_FLAG $DOCKER_RUN_EXTRA \
+    # --name: защита от двух сборок в один том — вторая честно откажется
+    docker run --rm --name thinclient-build-run $TTY_FLAG $DOCKER_RUN_EXTRA \
         -v "$PWD:/src" -v "$VOLUME:/build" \
         -e FORCE_UNSAFE_CONFIGURE=1 \
         -w /src/buildroot "$IMAGE" sh -c "$1"
