@@ -56,3 +56,6 @@ CONFIG_PCNET32=y
 
 # Ввод для X
 CONFIG_INPUT_EVDEV=y
+
+# USB-принтеры (проброс в RDP-сессию через CUPS + канал printer)
+CONFIG_USB_PRINTER=y

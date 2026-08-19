@@ -49,6 +49,16 @@ BR2_PACKAGE_BASH=y
 # TLS-сертификаты (если захочется убрать /cert:ignore)
 BR2_PACKAGE_CA_CERTIFICATES=y
 
+# Стандартные сетевые утилиты: ip/ss, ping/tracepath, ethtool, tcpdump
+BR2_PACKAGE_IPROUTE2=y
+BR2_PACKAGE_IPUTILS=y
+BR2_PACKAGE_ETHTOOL=y
+BR2_PACKAGE_TCPDUMP=y
+
+# Принтеры: CUPS на клиенте + канал printer в FreeRDP; lsusb для диагностики
+BR2_PACKAGE_CUPS=y
+BR2_PACKAGE_USBUTILS=y
+
 # rootfs целиком в RAM: initramfs cpio+gzip, никакого раздела с системой
 BR2_TARGET_ROOTFS_CPIO=y
 BR2_TARGET_ROOTFS_CPIO_GZIP=y

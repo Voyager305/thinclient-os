@@ -1,15 +1,13 @@
 #!/bin/sh
 # Главное меню тонкого клиента. Крутится на tty1 вместо getty (см. /etc/inittab).
 # Список серверов — /mnt/flash/servers.conf (FAT-раздел флешки), формат: имя;ip
-# Тема оформления — /etc/dialogrc.
+# Тема оформления — /etc/dialogrc. UI на английском: кириллица в текстовой
+# консоли рендерится ненадёжно (локали в минимальном glibc), ASCII — везде ровно.
 
 CONF=/mnt/flash/servers.conf
 PASS_FILE=/mnt/flash/shell.pass
 export TERM=linux
 export DIALOGRC=/etc/dialogrc
-# UTF-8, иначе ncurses печатает кириллицу мусором
-export LANG=C.UTF-8
-export LC_ALL=C.UTF-8
 
 # ASCII-логотип лежит отдельным файлом: внутри арта есть скобки/бэкслэши,
 # которые ломают heredoc в $() у старых шеллов
@@ -17,7 +15,7 @@ LOGO=$(cat /etc/tc-logo 2>/dev/null)
 LOGO_W=34
 LOGO_H=6
 MENU_W=64
-BACKTITLE="MCBU"
+BACKTITLE="MCBU · $(hostname)"
 
 save_server() {
     mount -o remount,rw /mnt/flash 2>/dev/null
@@ -25,18 +23,18 @@ save_server() {
         sync
     else
         # ISO-носитель: файловая система только для чтения
-        dialog --backtitle "$BACKTITLE" --title " Ошибка " --msgbox \
-            "Не удалось сохранить: носитель только для чтения (ISO-образ).\nПостоянный список серверов правится пересборкой либо образом usb.img." 8 60
+        dialog --backtitle "$BACKTITLE" --title " Error " --msgbox \
+            "Cannot save: read-only media (ISO image).\nPersistent server list needs the usb.img build." 8 56
     fi
     mount -o remount,ro /mnt/flash 2>/dev/null
 }
 
 add_server() {
-    name=$(dialog --backtitle "$BACKTITLE" --title " Новый сервер " \
-        --inputbox "Имя сервера:" 9 50 3>&1 1>&2 2>&3) || return
+    name=$(dialog --backtitle "$BACKTITLE" --title " New server " \
+        --inputbox "Server name:" 9 50 3>&1 1>&2 2>&3) || return
     [ -n "$name" ] || return
-    ip=$(dialog --backtitle "$BACKTITLE" --title " Новый сервер " \
-        --inputbox "IP-адрес (можно ip:порт):" 9 50 3>&1 1>&2 2>&3) || return
+    ip=$(dialog --backtitle "$BACKTITLE" --title " New server " \
+        --inputbox "IP address (ip or ip:port):" 9 50 3>&1 1>&2 2>&3) || return
     [ -n "$ip" ] || return
     save_server "$name" "$ip"
 }
@@ -45,18 +43,18 @@ open_shell() {
     # Если на флешке лежит shell.pass (sha256 от пароля) — спрашиваем пароль.
     # Создать: printf '%s' 'пароль' | sha256sum  -> первые 64 символа в файл.
     if [ -f "$PASS_FILE" ]; then
-        try=$(dialog --backtitle "$BACKTITLE" --title " Консоль " --insecure \
-            --passwordbox "Пароль:" 9 40 3>&1 1>&2 2>&3) || return
+        try=$(dialog --backtitle "$BACKTITLE" --title " Console " --insecure \
+            --passwordbox "Password:" 9 40 3>&1 1>&2 2>&3) || return
         hash=$(printf '%s' "$try" | sha256sum | cut -c1-64)
         stored=$(tr -d ' \t\r\n' < "$PASS_FILE")
         if [ "$hash" != "$stored" ]; then
-            dialog --backtitle "$BACKTITLE" --title " Консоль " \
-                --msgbox "Неверный пароль" 6 30
+            dialog --backtitle "$BACKTITLE" --title " Console " \
+                --msgbox "Wrong password" 6 30
             return
         fi
     fi
     clear
-    echo "=== Консоль (root). Выход в меню: exit или Ctrl-D ==="
+    echo "=== Linux console (root). Back to menu: exit or Ctrl-D ==="
     if [ -x /bin/bash ]; then
         /bin/bash -l
     else
@@ -66,7 +64,7 @@ open_shell() {
 
 connect() {
     clear
-    echo "Подключение к $1 ..."
+    echo "Connecting to $1 ..."
     # X живёт только пока идёт RDP-сессия; вышел из Windows — вернулся в меню
     xinit /usr/bin/tc-session "$1" -- -nolisten tcp >/var/log/xsession.log 2>&1
 }
@@ -101,17 +99,19 @@ while true; do
     logo_y=$(( (rows - LOGO_H - menu_h) / 2 )); [ "$logo_y" -lt 1 ] && logo_y=1
     menu_y=$(( logo_y + LOGO_H ))
 
+    # --no-collapse: не схлопывать пробелы в ASCII-арте, --cr-wrap: чтить \n
     choice=$(dialog --backtitle "$BACKTITLE" --keep-window \
+        --no-collapse --cr-wrap \
         --begin "$logo_y" "$logo_x" --infobox "$LOGO" $LOGO_H $LOGO_W \
         --and-widget --backtitle "$BACKTITLE" --no-cancel --no-tags \
-        --begin "$menu_y" "$menu_x" --title " Выбор сервера " \
-        --ok-label "Выбрать" \
+        --begin "$menu_y" "$menu_x" --title " Select server " \
+        --ok-label "Connect" \
         --menu "" "$menu_h" $MENU_W "$list_h" \
         "$@" \
-        "ADD"    "[+] Добавить сервер" \
-        "SHELL"  "[>] Консоль Linux" \
-        "REBOOT" "[r] Перезагрузка" \
-        "OFF"    "[o] Выключение" \
+        "ADD"    "[+] Add server" \
+        "SHELL"  "[>] Linux console" \
+        "REBOOT" "[r] Reboot" \
+        "OFF"    "[o] Power off" \
         3>&1 1>&2 2>&3)
 
     case "$choice" in

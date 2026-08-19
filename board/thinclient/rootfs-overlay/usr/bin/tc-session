@@ -1,4 +1,9 @@
 #!/bin/sh
 # Запускается внутри X через xinit: единственный клиент X-сервера — полноэкранный RDP.
-# /bpp:16 заметно разгружает старые Атомы; убери, если нужна полная цветность.
-exec xfreerdp /f /v:"$1" /cert:ignore /bpp:16 +clipboard
+# FreeRDP 2.11: RDP 7-10 (Windows Server 2008 R2 - 2022), NLA + TLS 1.2.
+#   /f                   — во весь экран в нативном разрешении монитора (KMS)
+#   /dynamic-resolution  — сессия подстраивается при смене разрешения
+#   /printer             — проброс принтеров клиента (CUPS) в сессию
+#   /bpp:16 разгружает старые Атомы; убери, если нужна полная цветность.
+exec xfreerdp /f /v:"$1" /cert:ignore /bpp:16 +clipboard \
+    /dynamic-resolution /printer
