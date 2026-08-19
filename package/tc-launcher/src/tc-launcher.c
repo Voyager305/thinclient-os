@@ -137,13 +137,18 @@ static void draw_bar(int focused, int bsel)
     attrset(COLOR_PAIR(C_NORM));
 }
 
-static void draw(int focus_bar, int sel, int bsel)
+/*
+ * Единая цепочка выбора: 0..nsrv-1 — серверы, nsrv — "+ Add server",
+ * nsrv+1..nsrv+NBAR — кнопки нижней полосы. Стрелки вверх/вниз ходят
+ * по всей цепочке по кругу.
+ */
+static void draw(int sel)
 {
     int gap = nsrv ? 1 : 0;
     int height = nsrv + gap + 1;
     int top = (LINES - 1 - height) / 2;
     int x0 = (COLS - LIST_W) / 2;
-    int list_focused = !focus_bar;
+    int in_bar = sel > nsrv;
     int i, y;
 
     if (top < 1)
@@ -160,23 +165,22 @@ static void draw(int focus_bar, int sel, int bsel)
 
     for (i = 0; i < nsrv; i++) {
         y = top + i;
-        attrset(COLOR_PAIR(list_focused && i == sel ? C_SEL : C_NORM));
+        attrset(COLOR_PAIR(i == sel ? C_SEL : C_NORM));
         mvhline(y, x0, ' ', LIST_W);
         mvaddnstr(y, x0 + 1, servers[i].name, NAME_W);
-        if (!(list_focused && i == sel))
+        if (i != sel)
             attrset(COLOR_PAIR(C_IP));
         mvaddstr(y, x0 + LIST_W - (int)strlen(servers[i].ip) - 1,
                  servers[i].ip);
     }
 
     y = top + nsrv + gap;
-    attrset(list_focused && sel == nsrv ? COLOR_PAIR(C_SEL)
-                                        : COLOR_PAIR(C_INFO));
-    if (list_focused && sel == nsrv)
+    attrset(sel == nsrv ? COLOR_PAIR(C_SEL) : COLOR_PAIR(C_INFO));
+    if (sel == nsrv)
         mvhline(y, x0, ' ', LIST_W);
     mvaddstr(y, x0 + 1, "+ Add server");
 
-    draw_bar(focus_bar, bsel);
+    draw_bar(in_bar, in_bar ? sel - nsrv - 1 : 0);
     refresh();
 }
 
@@ -227,13 +231,11 @@ static void bar_action(int bsel)
 
 int main(void)
 {
-    int sel = 0;        /* позиция в списке */
-    int bsel = 0;       /* позиция в нижней полосе */
-    int focus_bar = 0;  /* 0 — список, 1 — полоса действий */
+    int sel = 0;
     int total;
 
     load_servers();
-    total = nsrv + 1;
+    total = nsrv + 1 + NBAR;    /* серверы + Add + кнопки полосы */
 
     initscr();
     start_color();
@@ -253,64 +255,46 @@ int main(void)
     for (;;) {
         int c;
 
-        draw(focus_bar, sel, bsel);
+        draw(sel);
         c = getch();
         switch (c) {
         case ERR:
             break;
         case KEY_UP:
         case 'k':
-            if (focus_bar)
-                focus_bar = 0, sel = total - 1;
-            else if (sel > 0)
-                sel--;
-            else
-                focus_bar = 1;
+            sel = (sel + total - 1) % total;
             break;
         case KEY_DOWN:
         case 'j':
-            if (!focus_bar) {
-                if (sel < total - 1)
-                    sel++;
-                else
-                    focus_bar = 1;
-            } else {
-                focus_bar = 0;
-                sel = 0;
-            }
+        case '\t':
+            sel = (sel + 1) % total;
             break;
+        /* в полосе действий работают и влево/вправо */
         case KEY_LEFT:
         case 'h':
-            if (focus_bar)
-                bsel = (bsel + NBAR - 1) % NBAR;
-            else
-                focus_bar = 1;
+            if (sel > nsrv + 1)
+                sel--;
             break;
         case KEY_RIGHT:
         case 'l':
-            if (focus_bar)
-                bsel = (bsel + 1) % NBAR;
-            else
-                focus_bar = 1;
-            break;
-        case '\t':
-            focus_bar = !focus_bar;
+            if (sel > nsrv && sel < total - 1)
+                sel++;
             break;
         case '\n':
         case '\r':
         case KEY_ENTER:
-            if (focus_bar) {
-                bar_action(bsel);
-                return 0;
-            }
             if (sel < nsrv) {
                 endwin();
                 write_choice("CONNECT %s", servers[sel].ip, NULL);
                 return 0;
             }
-            if (do_add())
-                return 0;
-            break;
+            if (sel == nsrv) {
+                if (do_add())
+                    return 0;
+                break;
+            }
+            bar_action(sel - nsrv - 1);
+            return 0;
         /* F-клавиши оставлены как шорткаты */
         case KEY_F(2):
             if (do_add())

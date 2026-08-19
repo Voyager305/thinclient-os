@@ -87,7 +87,9 @@ case "$1" in
         run "$MAKE clean"
         ;;
     *)
-        run "$MAKE thinclient_defconfig && $MAKE"
+        # tc-launcher-dirclean: у «локальных» пакетов Buildroot не замечает
+        # изменения исходников — пересобираем лаунчер всегда (это секунды)
+        run "$MAKE thinclient_defconfig && $MAKE tc-launcher-dirclean && $MAKE"
         copy_images
         # На arm64-хосте (Apple Silicon) post-image пропускает usb.img: утилита
         # syslinux бывает только под x86. Дособираем секундным amd64-шагом (Rosetta).
