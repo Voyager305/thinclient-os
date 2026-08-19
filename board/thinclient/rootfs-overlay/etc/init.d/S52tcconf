@@ -1,0 +1,18 @@
+#!/bin/sh
+# Применяет настройки из tc.conf, которым нужна смонтированная флешка (S50flash)
+# и поднятая сеть (S51network): раскладка консоли и синхронизация времени.
+case "$1" in
+    start)
+        # Раскладка консоли (tty2-логин, ввод в меню). Пусто → системная.
+        KEYMAP=$(/usr/bin/tc-getconf KEYMAP)
+        [ -n "$KEYMAP" ] && loadkeys "$KEYMAP" 2>/dev/null
+
+        # Синхронизация времени (демон, держит часы весь аптайм). Пусто → без
+        # NTP. Нужен для NLA/Kerberos — при кривых часах RDP-логин падает.
+        NTP=$(/usr/bin/tc-getconf NTP_SERVER)
+        [ -n "$NTP" ] && ntpd -p "$NTP" 2>/dev/null
+        ;;
+    stop)
+        killall ntpd 2>/dev/null
+        ;;
+esac
