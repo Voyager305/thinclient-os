@@ -146,6 +146,7 @@ board/thinclient/
     etc/init.d/S50flash            носитель конфигов: поиск/создание TCDATA
     etc/init.d/S98splashdone       гасит заставку перед меню
     etc/profile.d/tc-prompt.sh     промпт user@host:cwd
+    root/.bashrc, .vimrc           окружение root-консоли
     usr/bin/tc-menu                обёртка: исполняет выбор лаунчера
     usr/bin/tc-netup               идемпотентный подъём сети
     usr/bin/tc-session             запуск xfreerdp внутри X
@@ -175,6 +176,7 @@ flash-usb.sh                       заливка usb.img на флешку (mac
 | Чёрный экран после загрузчика | Добавь `vga=791` в APPEND (`syslinux.cfg`) |
 | В углу `thinclient  no ip` | Нет сетевухи или её драйвера: в VM выбери e1000/rtl8139; на железе смотри `ip a` в консоли |
 | Меню не появилось | Ctrl+Alt+F2 → логи загрузки на tty2 |
+| ssh предупреждает о смене host-ключа | Норма для ISO/CD: система в RAM, ключ генерится на каждую загрузку |
 | RDP не подключается | С консоли: `ping <сервер>`, `tcpdump -i eth0 port 3389`; лог сессии в `/var/log/xsession.log` |
 
 ## Лицензия
