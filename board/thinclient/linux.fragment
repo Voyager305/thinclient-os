@@ -9,6 +9,16 @@ CONFIG_EFI=y
 CONFIG_FB_EFI=y
 CONFIG_SYSFB_SIMPLEFB=y
 
+# Watchdog: зависшую коробку само перезагрузит. ITCO — Intel (атомы/чипсеты),
+# SP5100 — AMD, i6300ESB — виртуалки (QEMU -watchdog), softdog — фоллбэк.
+CONFIG_WATCHDOG=y
+CONFIG_WATCHDOG_CORE=y
+CONFIG_ITCO_WDT=y
+CONFIG_ITCO_VENDOR_SUPPORT=y
+CONFIG_SP5100_TCO=y
+CONFIG_I6300ESB_WDT=y
+CONFIG_SOFT_WATCHDOG=y
+
 # Графика: framebuffer-консоль для меню.
 # i915 — старые чипсеты 945GSE (Atom N270 и т.п.), даёт KMS.
 # gma500 — Poulsbo/Cedar Trail (GMA 500/600/3600/3650), KMS без ускорения — для RDP хватает.

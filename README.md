@@ -204,7 +204,6 @@ board/thinclient/
   post-image.sh                    сборка usb.img (MBR+FAT32) и hybrid ISO+EFI
   rootfs-overlay/
     etc/inittab                    tc-menu на tty1, getty на tty2
-    etc/dialogrc                   тема dialog (наследие; лаунчер её не юзает)
     etc/X11/xorg.conf.d/10-fbdev.conf  X через fbdev + DontVTSwitch/DontZap
     etc/init.d/S00splash           заставка psplash
     etc/init.d/S35console          консольные шрифты (кириллица)
@@ -219,6 +218,8 @@ board/thinclient/
     usr/bin/tc-session             запуск xfreerdp внутри X
 build.sh                           сборка (Docker/нативно), TC_ROOT_PASSWORD
 flash-usb.sh                       заливка usb.img на флешку (macOS/Linux)
+tools/provision.sh                 тираж: залить + засеять конфиг площадки
+.github/workflows/ci.yml           CI: sh -n скриптов + компиляция лаунчера
 Dockerfile                         окружение сборки (Buildroot + host-утилиты)
 docs/RUNBOOK.md                    инструкции по всем сбоям/отказам
 LICENSE                            MIT

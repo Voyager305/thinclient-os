@@ -1,0 +1,14 @@
+#!/bin/sh
+# Кормит аппаратный watchdog, если ядро его нашло (/dev/watchdog). Запускаем
+# рано: если система зависнет позже — железо перезагрузит клиента само.
+# Нет /dev/watchdog (нет драйвера/устройства) — тихо пропускаем.
+case "$1" in
+    start)
+        [ -e /dev/watchdog ] || exit 0
+        # -t 15: пинать раз в 15с (таймаут железа обычно 60с)
+        watchdog -t 15 /dev/watchdog 2>/dev/null
+        ;;
+    stop)
+        killall watchdog 2>/dev/null
+        ;;
+esac

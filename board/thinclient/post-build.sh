@@ -15,3 +15,7 @@ rm -f "$TARGET_DIR/etc/tc-logo"
 # Сеть переехала на S51network (после S50flash, чтобы читать tc.conf).
 # Убираем скелетный/старый S40network, иначе сеть поднимется дважды.
 rm -f "$TARGET_DIR/etc/init.d/S40network"
+
+# dialog больше не используется (UI на tc-launcher) — чистим бинарь и конфиг,
+# если остались от прошлой сборки с BR2_PACKAGE_DIALOG=y
+rm -f "$TARGET_DIR/usr/bin/dialog" "$TARGET_DIR/etc/dialogrc"
