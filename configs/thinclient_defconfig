@@ -9,10 +9,13 @@ BR2_TOOLCHAIN_BUILDROOT_CXX=y
 
 BR2_TARGET_GENERIC_HOSTNAME="thinclient"
 BR2_TARGET_GENERIC_ISSUE="Thin client"
-# Пароль root: нужен для SSH и логина на tty2 (меню-консоль пароль
-# не спрашивает — у неё свой опциональный shell.pass). Сменить: здесь
-# или интерактивно passwd в консоли (до перезагрузки).
-BR2_TARGET_GENERIC_ROOT_PASSWD="changeme"
+# Пароль root (SSH + логин на tty2). ВНИМАНИЕ: значение ниже — НЕБЕЗОПАСНАЯ
+# заглушка «CHANGE THIS», не рабочий пароль. Задавай свой при сборке:
+#   TC_ROOT_PASSWORD='свой-пароль' ./build.sh   (durable, вписывается в образ)
+# либо интерактивно `passwd` в консоли (эфемерно — сбросится при перезагрузке,
+# система в RAM). SHA512 — чтобы хэш был $6$, а не слабый $5$.
+BR2_TARGET_GENERIC_PASSWD_SHA512=y
+BR2_TARGET_GENERIC_ROOT_PASSWD="CHANGEME-INSECURE-DEFAULT"
 
 # eudev нужен, чтобы Xorg сам находил клавиатуру/мышь/видео без ручного xorg.conf
 BR2_ROOTFS_DEVICE_CREATION_DYNAMIC_EUDEV=y
@@ -35,7 +38,7 @@ BR2_PACKAGE_XDRIVER_XF86_VIDEO_INTEL=y
 BR2_PACKAGE_XAPP_XINIT=y
 BR2_PACKAGE_XAPP_XAUTH=y
 
-# FreeRDP 3 (клиент xfreerdp)
+# FreeRDP 2.11 (клиент xfreerdp) — в Buildroot 2025.08 это ещё 2.x
 BR2_PACKAGE_FREERDP=y
 BR2_PACKAGE_FREERDP_CLIENT_X11=y
 

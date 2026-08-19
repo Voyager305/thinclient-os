@@ -32,8 +32,9 @@ save_server() {
     mount -o remount,ro /mnt/flash 2>/dev/null
 }
 
-# Если на флешке лежит shell.pass (sha256 от пароля) — спрашиваем пароль.
-# Создать: printf '%s' 'пароль' | sha256sum  -> первые 64 символа в файл.
+# Консоль по умолчанию БЕЗ пароля. Админ может её запаролить: положить на
+# флешку shell.pass с sha256-хэшем пароля — тогда консоль спросит его.
+# Создать: printf '%s' 'пароль' | sha256sum | cut -c1-64 > /mnt/flash/shell.pass
 check_pass() {
     [ -f "$PASS_FILE" ] || return 0
     clear

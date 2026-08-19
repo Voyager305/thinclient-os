@@ -20,6 +20,10 @@ BR_VERSION=2025.08
 IMAGE=thinclient-build
 VOLUME=thinclient-output
 
+# Пароль root задаётся при сборке: TC_ROOT_PASSWORD='...' ./build.sh
+# (вписывается в .config поверх небезопасной заглушки из defconfig).
+export TC_ROOT_PASSWORD
+
 if [ ! -d buildroot ]; then
     echo ">>> Клонирую Buildroot $BR_VERSION..."
     git clone --depth 1 --branch "$BR_VERSION" \
@@ -42,7 +46,7 @@ if [ "$MODE" = native ]; then
     # post-image.sh собирает образы хостовыми утилитами — проверим, что они есть
     for tool in gcc make mkfs.vfat mcopy parted syslinux; do
         command -v "$tool" >/dev/null 2>&1 || {
-            echo "Не хватает '$tool'. Список пакетов для своего дистрибутива — в README (раздел 'Сборка (Linux)')" >&2
+            echo "Не хватает '$tool'. Список пакетов для своего дистрибутива — в README (раздел 'Сборка из исходников')" >&2
             exit 1
         }
     done
@@ -59,7 +63,7 @@ docker_run() {
     # --name: защита от двух сборок в один том — вторая честно откажется
     docker run --rm --name thinclient-build-run $TTY_FLAG $DOCKER_RUN_EXTRA \
         -v "$PWD:/src" -v "$VOLUME:/build" \
-        -e FORCE_UNSAFE_CONFIGURE=1 \
+        -e FORCE_UNSAFE_CONFIGURE=1 -e TC_ROOT_PASSWORD \
         -w /src/buildroot "$IMAGE" sh -c "$1"
 }
 
@@ -88,9 +92,21 @@ case "$1" in
         run "$MAKE clean"
         ;;
     *)
+        # Путь к .config зависит от режима (docker: out-of-tree O=/build)
+        if [ "$MODE" = native ]; then CFG=".config"; else CFG="/build/.config"; fi
+        # Инъекция root-пароля из TC_ROOT_PASSWORD между defconfig и сборкой.
+        # $CFG/$MAKE раскрываются на хосте (статичны); $TC_ROOT_PASSWORD —
+        # внутри сборочного шелла (из env), поэтому \$ экранирован.
+        PW_STEP=""
+        if [ -n "$TC_ROOT_PASSWORD" ]; then
+            PW_STEP="&& sed -i \"s|^BR2_TARGET_GENERIC_ROOT_PASSWD=.*|BR2_TARGET_GENERIC_ROOT_PASSWD=\\\"\$TC_ROOT_PASSWORD\\\"|\" $CFG && $MAKE olddefconfig "
+        else
+            echo ">>> ВНИМАНИЕ: TC_ROOT_PASSWORD не задан — в образ уйдёт НЕБЕЗОПАСНЫЙ" >&2
+            echo ">>> дефолт root-пароля. Для боевой сборки: TC_ROOT_PASSWORD='...' ./build.sh" >&2
+        fi
         # tc-launcher-dirclean: у «локальных» пакетов Buildroot не замечает
         # изменения исходников — пересобираем лаунчер всегда (это секунды)
-        run "$MAKE thinclient_defconfig && $MAKE tc-launcher-dirclean && $MAKE"
+        run "$MAKE thinclient_defconfig $PW_STEP && $MAKE tc-launcher-dirclean && $MAKE"
         copy_images
         # На arm64-хосте (Apple Silicon) post-image пропускает usb.img: утилита
         # syslinux бывает только под x86. Дособираем секундным amd64-шагом (Rosetta).

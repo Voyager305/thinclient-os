@@ -1,6 +1,5 @@
-diff -ruN a/psplash-colors.h b/psplash-colors.h
---- a/psplash-colors.h	2026-08-19 08:03:35.298910005 +0000
-+++ b/psplash-colors.h	2026-08-19 08:03:35.302910005 +0000
+--- a/psplash-colors.h	2026-08-19 22:14:51
++++ b/psplash-colors.h	2026-08-19 22:14:52
 @@ -12,15 +12,15 @@
  #define _HAVE_PSPLASH_COLORS_H
  
@@ -21,10 +20,9 @@ diff -ruN a/psplash-colors.h b/psplash-colors.h
 +#define PSPLASH_BAR_BACKGROUND_COLOR 0x28,0x28,0x28
  
  #endif
-diff -ruN a/psplash.c b/psplash.c
---- a/psplash.c	2026-08-19 08:03:35.298910005 +0000
-+++ b/psplash.c	2026-08-19 08:03:35.301910005 +0000
-@@ -302,20 +302,6 @@
+--- a/psplash.c	2026-08-19 22:14:51
++++ b/psplash.c	2026-08-19 22:14:51
+@@ -302,31 +302,16 @@
    psplash_fb_draw_rect (fb, 0, 0, fb->width, fb->height,
                          PSPLASH_BACKGROUND_COLOR);
  
@@ -44,4 +42,20 @@ diff -ruN a/psplash.c b/psplash.c
 -			 POKY_IMG_RLE_PIXEL_DATA);
  
  #ifdef PSPLASH_SHOW_PROGRESS_BAR
-   /* Draw progress bar border */
+-  /* Draw progress bar border */
+-  psplash_fb_draw_image (fb, 
+-			 (fb->width  - BAR_IMG_WIDTH)/2, 
++  /* Draw progress bar border as a flat rect: the stock bar image has
++     light #ecece1 pixels baked into its rounded corners. */
++  psplash_fb_draw_rect (fb,
++			 (fb->width  - BAR_IMG_WIDTH)/2,
+ 			 SPLIT_LINE_POS(fb),
+ 			 BAR_IMG_WIDTH,
+ 			 BAR_IMG_HEIGHT,
+-			 BAR_IMG_BYTES_PER_PIXEL,
+-			 BAR_IMG_ROWSTRIDE,
+-			 BAR_IMG_RLE_PIXEL_DATA);
++			 PSPLASH_BAR_COLOR);
+ 
+   psplash_draw_progress (fb, 0);
+ #endif

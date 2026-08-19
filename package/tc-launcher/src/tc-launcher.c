@@ -111,7 +111,9 @@ static void write_choice(const char *fmt, const char *arg1, const char *arg2)
     fclose(f);
 }
 
-/* сервисные кнопки — вертикальным столбиком внизу */
+/* сервисные кнопки — вертикальным столбиком внизу. Console показывается
+ * всегда; пароль на неё (опционально) ставит админ файлом shell.pass —
+ * проверку делает tc-menu. */
 #define NBAR 3
 static const char *bar_label[NBAR] = { " Console ", " Reboot ", " PowerOff " };
 
