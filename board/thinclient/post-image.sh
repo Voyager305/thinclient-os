@@ -16,14 +16,18 @@ PART_MB=256
 # внутрь образа загрузчика). Buildroot тут не помощник: на i686 он не
 # собирает x86_64-efi. Нет grub-утилит в системе — тихо живём BIOS-only.
 EFI_DIR="$BINARIES_DIR/efi-gen"
+# минимальный набор: без него mkstandalone тащит ВСЕ модули (~9 МБ на образ)
+EFI_MODULES="boot linux normal fat iso9660 part_msdos part_gpt search search_fs_file efi_gop echo"
 gen_efi() {
-    [ -f "$EFI_DIR/bootx64.efi" ] || [ -f "$EFI_DIR/bootia32.efi" ] && return 0
     command -v grub-mkstandalone >/dev/null 2>&1 || return 1
+    rm -rf "$EFI_DIR"
     mkdir -p "$EFI_DIR"
     [ -d /usr/lib/grub/x86_64-efi ] && grub-mkstandalone -O x86_64-efi \
+        --install-modules="$EFI_MODULES" \
         -o "$EFI_DIR/bootx64.efi" \
         "boot/grub/grub.cfg=$BOARD_DIR/grub-efi.cfg" 2>/dev/null
     [ -d /usr/lib/grub/i386-efi ] && grub-mkstandalone -O i386-efi \
+        --install-modules="$EFI_MODULES" \
         -o "$EFI_DIR/bootia32.efi" \
         "boot/grub/grub.cfg=$BOARD_DIR/grub-efi.cfg" 2>/dev/null
     [ -f "$EFI_DIR/bootx64.efi" ] || [ -f "$EFI_DIR/bootia32.efi" ]
@@ -38,13 +42,16 @@ add_efi_to_fat() {
     true
 }
 
-# отдельный маленький FAT для El Torito EFI-загрузки ISO
+# отдельный FAT для El Torito EFI-загрузки ISO; размер — по факту + запас
 build_efiboot_img() {
     gen_efi || return 1
     EFIBOOT="$BINARIES_DIR/efiboot.img"
-    dd if=/dev/zero of="$EFIBOOT" bs=1M count=8 status=none
-    mkfs.vfat -F 12 -n EFIBOOT "$EFIBOOT" >/dev/null
+    SZ_MB=$(( $(du -cm "$EFI_DIR"/*.efi 2>/dev/null | tail -1 | cut -f1) + 4 ))
+    dd if=/dev/zero of="$EFIBOOT" bs=1M count="$SZ_MB" status=none
+    mkfs.vfat -n EFIBOOT "$EFIBOOT" >/dev/null
     add_efi_to_fat "$EFIBOOT"
+    # убедиться, что загрузчик реально лёг внутрь (а не молча не влез)
+    mdir -i "$EFIBOOT" ::/EFI/BOOT 2>/dev/null | grep -qi 'boot.*efi'
 }
 
 build_img() {
