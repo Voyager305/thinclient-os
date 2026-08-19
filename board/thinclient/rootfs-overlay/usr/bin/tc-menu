@@ -15,7 +15,13 @@ LOGO=$(cat /etc/tc-logo 2>/dev/null)
 LOGO_W=34
 LOGO_H=6
 MENU_W=64
-BACKTITLE="MCBU · $(hostname)"
+# верхняя строка: MCBU | tc-<mac> | <ip>; обновляется при каждой перерисовке
+# (ASCII-разделители — UTF-8 в консоли рендерится ненадёжно)
+update_backtitle() {
+    ipaddr=$(ip -4 -o addr show scope global 2>/dev/null \
+        | awk 'NR==1{sub("/.*","",$4); print $4}')
+    BACKTITLE="MCBU | $(hostname) | ${ipaddr:-no ip}"
+}
 
 save_server() {
     mount -o remount,rw /mnt/flash 2>/dev/null
@@ -70,6 +76,8 @@ connect() {
 }
 
 while true; do
+    update_backtitle
+
     # пункты меню: тег = ip (скрыт через --no-tags), подпись = имя + ip
     set --
     if [ -f "$CONF" ]; then

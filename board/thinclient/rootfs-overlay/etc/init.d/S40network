@@ -4,16 +4,27 @@
 case "$1" in
     start)
         # hostname tc-<MAC без разделителей> по первому сетевому интерфейсу —
-        # клиент видно и в DHCP leases, и в RDP-сессии на сервере
-        for path in /sys/class/net/*; do
-            iface=$(basename "$path")
-            [ "$iface" = "lo" ] && continue
-            mac=$(tr -d ':\n' < "$path/address" 2>/dev/null)
-            if [ -n "$mac" ]; then
-                hostname "tc-$mac"
-                echo "tc-$mac" > /etc/hostname
-                break
-            fi
+        # клиент видно и в DHCP leases, и в RDP-сессии на сервере.
+        # MAC должен быть настоящим: 12 hex-символов и не все нули (сетевуха
+        # может подниматься не мгновенно — ждём до 3 секунд).
+        n=0
+        while [ "$n" -lt 15 ]; do
+            for path in /sys/class/net/*; do
+                iface=$(basename "$path")
+                [ "$iface" = "lo" ] && continue
+                mac=$(tr -d ':\n' < "$path/address" 2>/dev/null)
+                case "$mac" in
+                    ????????????)
+                        case "$mac" in *[!0]*)
+                            hostname "tc-$mac"
+                            echo "tc-$mac" > /etc/hostname
+                            break 2
+                        ;; esac
+                    ;;
+                esac
+            done
+            n=$((n + 1))
+            sleep 0.2
         done
 
         ip link set lo up
