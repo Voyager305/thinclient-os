@@ -94,12 +94,9 @@ BR2_PACKAGE_UTIL_LINUX_BINARIES=y
 BR2_PACKAGE_DOSFSTOOLS=y
 BR2_PACKAGE_DOSFSTOOLS_MKFS_FAT=y
 
-# UEFI-загрузка (современные компы без CSM): grub-efi обеих разрядностей —
-# x64 для обычных машин, ia32 для планшетно-атомных Bay Trail
-BR2_TARGET_GRUB2=y
-BR2_TARGET_GRUB2_I386_EFI=y
-BR2_TARGET_GRUB2_X86_64_EFI=y
-BR2_TARGET_GRUB2_BUILTIN_MODULES_EFI="boot linux fat iso9660 part_msdos part_gpt normal efi_gop search search_fs_file"
+# UEFI-загрузка: grub-efi НЕ отсюда — Buildroot на i686 не умеет собрать
+# x86_64-efi (а он нужен всем современным компам). Оба bootx64/bootia32
+# генерятся grub-mkstandalone в amd64-шаге post-image (см. Dockerfile).
 
 # rootfs целиком в RAM: initramfs cpio+gzip, никакого раздела с системой
 BR2_TARGET_ROOTFS_CPIO=y

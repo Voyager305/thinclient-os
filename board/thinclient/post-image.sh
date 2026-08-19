@@ -12,25 +12,35 @@ set -e
 BOARD_DIR="$(cd "$(dirname "$0")" && pwd)"
 PART_MB=256
 
-# UEFI: собрать FAT-образ с grub-efi (для El Torito ISO) и уметь докладывать
-# EFI/BOOT в любой FAT. Если grub-efi не собран — тихо живём BIOS-only.
-EFI_SRC="$BINARIES_DIR/efi-part/EFI/BOOT"
-have_efi() {
-    [ -f "$EFI_SRC/bootx64.efi" ] || [ -f "$EFI_SRC/bootia32.efi" ]
+# UEFI: bootx64/bootia32 генерятся grub-mkstandalone (конфиг вшивается
+# внутрь образа загрузчика). Buildroot тут не помощник: на i686 он не
+# собирает x86_64-efi. Нет grub-утилит в системе — тихо живём BIOS-only.
+EFI_DIR="$BINARIES_DIR/efi-gen"
+gen_efi() {
+    [ -f "$EFI_DIR/bootx64.efi" ] || [ -f "$EFI_DIR/bootia32.efi" ] && return 0
+    command -v grub-mkstandalone >/dev/null 2>&1 || return 1
+    mkdir -p "$EFI_DIR"
+    [ -d /usr/lib/grub/x86_64-efi ] && grub-mkstandalone -O x86_64-efi \
+        -o "$EFI_DIR/bootx64.efi" \
+        "boot/grub/grub.cfg=$BOARD_DIR/grub-efi.cfg" 2>/dev/null
+    [ -d /usr/lib/grub/i386-efi ] && grub-mkstandalone -O i386-efi \
+        -o "$EFI_DIR/bootia32.efi" \
+        "boot/grub/grub.cfg=$BOARD_DIR/grub-efi.cfg" 2>/dev/null
+    [ -f "$EFI_DIR/bootx64.efi" ] || [ -f "$EFI_DIR/bootia32.efi" ]
 }
 
-# докладывает EFI/BOOT/{boot*.efi,grub.cfg} в FAT-образ $1 (через mtools)
+# докладывает EFI/BOOT/boot*.efi в FAT-образ $1 (через mtools)
 add_efi_to_fat() {
-    have_efi || return 0
+    gen_efi || return 0
     mmd -i "$1" ::/EFI ::/EFI/BOOT 2>/dev/null || true
-    [ -f "$EFI_SRC/bootx64.efi" ]  && mcopy -o -i "$1" "$EFI_SRC/bootx64.efi"  ::/EFI/BOOT/
-    [ -f "$EFI_SRC/bootia32.efi" ] && mcopy -o -i "$1" "$EFI_SRC/bootia32.efi" ::/EFI/BOOT/
-    mcopy -o -i "$1" "$BOARD_DIR/grub-efi.cfg" ::/EFI/BOOT/grub.cfg
+    [ -f "$EFI_DIR/bootx64.efi" ]  && mcopy -o -i "$1" "$EFI_DIR/bootx64.efi"  ::/EFI/BOOT/
+    [ -f "$EFI_DIR/bootia32.efi" ] && mcopy -o -i "$1" "$EFI_DIR/bootia32.efi" ::/EFI/BOOT/
+    true
 }
 
 # отдельный маленький FAT для El Torito EFI-загрузки ISO
 build_efiboot_img() {
-    have_efi || return 1
+    gen_efi || return 1
     EFIBOOT="$BINARIES_DIR/efiboot.img"
     dd if=/dev/zero of="$EFIBOOT" bs=1M count=8 status=none
     mkfs.vfat -F 12 -n EFIBOOT "$EFIBOOT" >/dev/null

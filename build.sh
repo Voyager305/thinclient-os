@@ -94,11 +94,10 @@ case "$1" in
         copy_images
         # На arm64-хосте (Apple Silicon) post-image пропускает usb.img: утилита
         # syslinux бывает только под x86. Дособираем секундным amd64-шагом (Rosetta).
-        NEED_IMG=0
-        [ ! -f buildroot/output/images/usb.img ] && NEED_IMG=1
-        [ buildroot/output/images/usb.img -ot buildroot/output/images/rootfs.cpio.gz ] 2>/dev/null && NEED_IMG=1
-        if [ "$MODE" = docker ] && [ "$NEED_IMG" = 1 ]; then
-            echo ">>> Дособираю usb.img в amd64-контейнере..."
+        # Финальная сборка образов — всегда в amd64-контейнере: только там
+        # есть syslinux (usb.img) и grub-efi обеих разрядностей (UEFI)
+        if [ "$MODE" = docker ]; then
+            echo ">>> Финальная сборка образов в amd64-контейнере..."
             docker build --platform linux/amd64 -t "$IMAGE-amd64" .
             TTY_FLAG=""; [ -t 0 ] && TTY_FLAG="-it"
             docker run --rm $TTY_FLAG --platform linux/amd64 -v "$PWD:/src" \
