@@ -1,0 +1,34 @@
+name: ci
+
+# Лёгкий CI: синтаксис shell-скриптов + компиляция tc-launcher. Полная сборка
+# образа Buildroot (1–3 часа) сюда не вынесена — гоняется локально ./build.sh.
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: sh -n всех shell-скриптов
+        run: |
+          fail=0
+          for f in build.sh flash-usb.sh tools/*.sh \
+                   board/thinclient/*.sh \
+                   board/thinclient/rootfs-overlay/usr/bin/* \
+                   board/thinclient/rootfs-overlay/etc/init.d/S* \
+                   board/thinclient/rootfs-overlay/etc/profile.d/*.sh; do
+            [ -f "$f" ] || continue
+            if sh -n "$f"; then echo "ok  $f"; else echo "FAIL $f"; fail=1; fi
+          done
+          exit $fail
+
+      - name: компиляция tc-launcher
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libncurses-dev
+          cc -Wall -Wextra -o /tmp/tc-launcher \
+             package/tc-launcher/src/tc-launcher.c -lncurses
