@@ -132,6 +132,38 @@ connect_error() {
     read -r _
 }
 
+# Экран управления серверами: лаунчер в режиме --manage возвращает одно
+# действие (ADD/EDIT/DELETE/BACK), применяем и снова показываем экран,
+# пока не BACK/пусто. Вывод лаунчера НЕ перехватываем (ncurses рисует в
+# терминал) — действие читаем из файла $OUT.
+manage_loop() {
+    while true; do
+        rm -f "$OUT"
+        /usr/bin/tc-launcher --manage
+        a=$(cat "$OUT" 2>/dev/null)
+        case "$a" in
+            ADD\ *)
+                entry=${a#ADD }
+                name=${entry%%;*}
+                addr=${entry#*;}
+                [ -n "$name" ] && [ -n "$addr" ] && save_server "$name" "$addr"
+                ;;
+            DELETE\ *)
+                delete_server "${a#DELETE }"
+                ;;
+            EDIT\ *)
+                rest=${a#EDIT }
+                old=${rest%%"$TAB"*}
+                new=${rest#*"$TAB"}
+                [ "$old" != "$new" ] && edit_server "$old" "$new"
+                ;;
+            *)
+                break
+                ;;
+        esac
+    done
+}
+
 while true; do
     # сеть могла появиться позже загрузки — лаунчер покажет ip, как только он есть
     ip -4 -o addr show scope global 2>/dev/null | grep -q . || /usr/bin/tc-netup 2>/dev/null
@@ -156,20 +188,8 @@ while true; do
         CONNECT\ *)
             connect "${action#CONNECT }"
             ;;
-        ADD\ *)
-            entry=${action#ADD }
-            name=${entry%%;*}
-            addr=${entry#*;}
-            [ -n "$name" ] && [ -n "$addr" ] && save_server "$name" "$addr"
-            ;;
-        DELETE\ *)
-            delete_server "${action#DELETE }"
-            ;;
-        EDIT\ *)
-            rest=${action#EDIT }
-            old=${rest%%"$TAB"*}
-            new=${rest#*"$TAB"}
-            [ "$old" != "$new" ] && edit_server "$old" "$new"
+        MANAGE)
+            manage_loop
             ;;
         SHELL)
             open_shell

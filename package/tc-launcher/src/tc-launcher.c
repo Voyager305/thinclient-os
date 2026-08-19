@@ -116,13 +116,15 @@ static void write_choice(const char *fmt, const char *arg1, const char *arg2)
  * проверку делает tc-menu. */
 #define NBAR 3
 static const char *bar_label[NBAR] = { " Console ", " Reboot ", " PowerOff " };
+static int nbar = NBAR;   /* 0 в режиме управления серверами */
+static int manage = 0;    /* 1 = экран «Manage servers» (add/edit/delete) */
 
 static void draw_buttons(int sel, int x0)
 {
-    int base = LINES - 1 - NBAR;
+    int base = LINES - 1 - nbar;
     int i;
 
-    for (i = 0; i < NBAR; i++) {
+    for (i = 0; i < nbar; i++) {
         if (sel == nsrv + 1 + i)
             attrset(COLOR_PAIR(C_SEL));
         else
@@ -178,12 +180,16 @@ static void draw(int sel)
     attrset(sel == nsrv ? COLOR_PAIR(C_SEL) : COLOR_PAIR(C_INFO));
     if (sel == nsrv)
         mvhline(y, x0, ' ', LIST_W);
-    mvaddstr(y, x0 + 1, "+ Add server");
+    mvaddstr(y, x0 + 1, manage ? "+ Add server" : "Manage servers");
 
-    /* подсказка действий над выбранным сервером */
-    if (nsrv && sel < nsrv) {
+    if (manage) {
+        attrset(COLOR_PAIR(C_HOST));
+        mvaddstr(0, (COLS - 14) / 2, "Manage servers");
         attrset(COLOR_PAIR(C_INFO));
-        mvaddstr(LINES - 1, 1, "Enter connect   e edit   d delete");
+        mvaddstr(LINES - 1, 1, "Enter/e edit   d delete   a add   q back");
+    } else if (nsrv && sel < nsrv) {
+        attrset(COLOR_PAIR(C_INFO));
+        mvaddstr(LINES - 1, 1, "Enter connect");
     }
 
     draw_buttons(sel, x0);
@@ -310,13 +316,18 @@ static void bar_action(int bsel)
     write_choice(act[bsel], NULL, NULL);
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
     int sel = 0;
     int total;
 
+    if (argc > 1 && strcmp(argv[1], "--manage") == 0) {
+        manage = 1;
+        nbar = 0;               /* в режиме управления нет сервис-кнопок */
+    }
+
     load_servers();
-    total = nsrv + 1 + NBAR;    /* серверы + Add + кнопки полосы */
+    total = nsrv + 1 + nbar;    /* серверы + Add/Manage (+ кнопки в main) */
 
     initscr();
     start_color();
@@ -355,42 +366,64 @@ int main(void)
         case '\r':
         case KEY_ENTER:
             if (sel < nsrv) {
+                if (manage) {
+                    if (do_edit(sel))
+                        return 0;
+                    break;
+                }
                 endwin();
                 write_choice("CONNECT %s", servers[sel].ip, NULL);
                 return 0;
             }
             if (sel == nsrv) {
-                if (do_add())
+                if (manage) {
+                    if (do_add())
+                        return 0;
+                } else {
+                    endwin();
+                    write_choice("MANAGE", NULL, NULL);
                     return 0;
+                }
                 break;
             }
-            bar_action(sel - nsrv - 1);
+            bar_action(sel - nsrv - 1);   /* сервис-кнопки (только main) */
             return 0;
+        /* --- клавиши режима управления серверами --- */
         case 'e':
         case 'E':
-            if (sel < nsrv && do_edit(sel))
+            if (manage && sel < nsrv && do_edit(sel))
+                return 0;
+            break;
+        case 'a':
+        case 'A':
+            if (manage && do_add())
                 return 0;
             break;
         case 'd':
         case 'D':
         case KEY_DC:
-            if (sel < nsrv && do_delete(sel))
+            if (manage && sel < nsrv && do_delete(sel))
                 return 0;
             break;
-        /* F-клавиши оставлены как шорткаты */
-        case KEY_F(2):
-            if (do_add())
+        case 'q':
+        case 'Q':
+        case 27:               /* Esc */
+            if (manage) {
+                endwin();
+                write_choice("BACK", NULL, NULL);
                 return 0;
+            }
             break;
+        /* F-клавиши: сервис (только main) */
         case KEY_F(3):
-            bar_action(0);
-            return 0;
+            if (!manage) { bar_action(0); return 0; }
+            break;
         case KEY_F(4):
-            bar_action(1);
-            return 0;
+            if (!manage) { bar_action(1); return 0; }
+            break;
         case KEY_F(5):
-            bar_action(2);
-            return 0;
+            if (!manage) { bar_action(2); return 0; }
+            break;
         default:
             break;
         }
