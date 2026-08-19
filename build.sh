@@ -17,6 +17,11 @@ set -e
 cd "$(dirname "$0")"
 
 BR_VERSION=2025.08
+# Пин коммита тега 2025.08: тег подвижен, а .hash всех пакетов лежат ВНУТРИ
+# этого дерева — если тег кто-то передвинул/подменил, хэши «подтвердят»
+# чужие исходники. Проверяем HEAD против ожидаемого SHA. Намеренный апдейт
+# Buildroot = обнови и BR_VERSION, и BR_COMMIT.
+BR_COMMIT=3386677f0a4d1c0150e772eb07cede05e88a2d6d
 IMAGE=thinclient-build
 VOLUME=thinclient-output
 
@@ -28,6 +33,15 @@ if [ ! -d buildroot ]; then
     echo ">>> Клонирую Buildroot $BR_VERSION..."
     git clone --depth 1 --branch "$BR_VERSION" \
         https://gitlab.com/buildroot.org/buildroot.git buildroot
+fi
+
+# Проверка пина (детектит сдвинутый тег / подменённое дерево)
+BR_HEAD=$(git -C buildroot rev-parse HEAD 2>/dev/null)
+if [ "$BR_HEAD" != "$BR_COMMIT" ]; then
+    echo "ОШИБКА: Buildroot на $BR_HEAD, ожидался $BR_COMMIT." >&2
+    echo "Тег $BR_VERSION мог сдвинуться. Если апдейт намеренный — обнови" >&2
+    echo "BR_COMMIT в build.sh; иначе проверь источник." >&2
+    exit 1
 fi
 
 if [ "$(uname -s)" = "Linux" ] && { [ -n "$NATIVE" ] || ! command -v docker >/dev/null 2>&1; }; then
@@ -120,8 +134,17 @@ case "$1" in
                 -e BINARIES_DIR=/src/buildroot/output/images \
                 "$IMAGE-amd64" /src/board/thinclient/post-image.sh
         fi
+        # SHA256SUMS для проверки целостности релизных образов. Считаем на
+        # хосте после финальной сборки; терпим отсутствие usb.img (arm64).
+        IMG_DIR="buildroot/output/images"
+        if command -v sha256sum >/dev/null 2>&1; then SHA="sha256sum"; else SHA="shasum -a 256"; fi
+        ( cd "$IMG_DIR" && : > SHA256SUMS.txt
+          for f in thinclient.iso usb.img; do
+              [ -f "$f" ] && $SHA "$f" >> SHA256SUMS.txt
+          done )
         echo ""
-        echo ">>> Образы: buildroot/output/images/usb.img (флешка) и thinclient.iso (VirtualBox/Etcher)"
+        echo ">>> Образы: $IMG_DIR/{usb.img,thinclient.iso}; контрольные суммы — $IMG_DIR/SHA256SUMS.txt"
+        cat "$IMG_DIR/SHA256SUMS.txt" 2>/dev/null
         echo ">>> Залить img: ./flash-usb.sh <устройство>  (macOS: /dev/diskN, Linux: /dev/sdX)"
         ;;
 esac
