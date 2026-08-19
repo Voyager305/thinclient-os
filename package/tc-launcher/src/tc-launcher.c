@@ -160,6 +160,24 @@ static void draw(int sel)
     attrset(COLOR_PAIR(C_HOST));
     mvaddstr(0, 1, info);
 
+    /* версия образа (из /etc/tc-release) — в правом верхнем углу; читаем раз */
+    {
+        static char ver[48] = "\1";     /* \1 = ещё не читали */
+        if (ver[0] == '\1') {
+            FILE *vf = fopen("/etc/tc-release", "r");
+            ver[0] = 0;
+            if (vf) {
+                if (fgets(ver, sizeof ver, vf))
+                    ver[strcspn(ver, "\r\n")] = 0;
+                fclose(vf);
+            }
+        }
+        if (ver[0]) {
+            attrset(COLOR_PAIR(C_INFO));
+            mvaddstr(0, COLS - (int)strlen(ver) - 1, ver);
+        }
+    }
+
     if (!nsrv) {
         attrset(COLOR_PAIR(C_INFO));
         mvaddstr(top - 2, (COLS - 21) / 2, "No servers configured");

@@ -29,6 +29,10 @@ VOLUME=thinclient-output
 # (вписывается в .config поверх небезопасной заглушки из defconfig).
 export TC_ROOT_PASSWORD
 
+# Версия образа (из git) → /etc/tc-release, показывается в углу меню.
+TC_VERSION=$(git describe --tags --always 2>/dev/null || echo dev)
+export TC_VERSION
+
 if [ ! -d buildroot ]; then
     echo ">>> Клонирую Buildroot $BR_VERSION..."
     git clone --depth 1 --branch "$BR_VERSION" \
@@ -77,7 +81,7 @@ docker_run() {
     # --name: защита от двух сборок в один том — вторая честно откажется
     docker run --rm --name thinclient-build-run $TTY_FLAG $DOCKER_RUN_EXTRA \
         -v "$PWD:/src" -v "$VOLUME:/build" \
-        -e FORCE_UNSAFE_CONFIGURE=1 -e TC_ROOT_PASSWORD \
+        -e FORCE_UNSAFE_CONFIGURE=1 -e TC_ROOT_PASSWORD -e TC_VERSION \
         -w /src/buildroot "$IMAGE" sh -c "$1"
 }
 
