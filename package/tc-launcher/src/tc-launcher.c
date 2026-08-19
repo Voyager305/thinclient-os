@@ -210,12 +210,27 @@ static int prompt(const char *label, char *buf, int n)
     return r != ERR && buf[0] != 0;
 }
 
+/* убрать из поля символы, ломающие формат "имя;ip" */
+static void strip_semicolons(char *s)
+{
+    char *p, *q;
+
+    for (p = q = s; *p; p++)
+        if (*p != ';')
+            *q++ = *p;
+    *q = 0;
+}
+
 static int do_add(void)
 {
     char name[64], ip[64];
 
     if (prompt("Server name:", name, sizeof name) &&
         prompt("IP address (ip or ip:port):", ip, sizeof ip)) {
+        strip_semicolons(name);
+        strip_semicolons(ip);
+        if (!name[0] || !ip[0])
+            return 0;
         endwin();
         write_choice("ADD %s;%s", name, ip);
         return 1;

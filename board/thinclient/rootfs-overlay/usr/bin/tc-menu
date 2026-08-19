@@ -9,8 +9,19 @@ OUT=/tmp/tc-choice
 export TERM=linux
 
 save_server() {
+    # формат не должен ломаться, что бы ни пришло: точки с запятой и
+    # переводы строк из полей выкидываем
+    name=$(printf '%s' "$1" | tr -d ';\r\n')
+    addr=$(printf '%s' "$2" | tr -d ';\r\n ')
+    [ -n "$name" ] && [ -n "$addr" ] || return
+
     mount -o remount,rw /mnt/flash 2>/dev/null
-    if printf '%s;%s\r\n' "$1" "$2" >> "$CONF" 2>/dev/null; then
+    # если файл не кончается переводом строки — новая запись приклеится
+    # к последней (так один раз и похерился conf), добиваем разделитель
+    if [ -s "$CONF" ] && [ -n "$(tail -c1 "$CONF" 2>/dev/null)" ]; then
+        printf '\r\n' >> "$CONF" 2>/dev/null
+    fi
+    if printf '%s;%s\r\n' "$name" "$addr" >> "$CONF" 2>/dev/null; then
         sync
     else
         clear
