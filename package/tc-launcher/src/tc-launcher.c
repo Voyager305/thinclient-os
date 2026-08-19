@@ -44,7 +44,8 @@ enum {
     C_SEL,        /* выбранная строка */
     C_BAR,        /* сегменты полосы действий */
     C_KEY,        /* клавиши в полосе действий */
-    C_INFO        /* приглушённый служебный текст */
+    C_INFO,       /* приглушённый служебный текст */
+    C_HOST        /* hostname и ip в углу */
 };
 
 static void load_servers(void)
@@ -112,7 +113,7 @@ static void write_choice(const char *fmt, const char *arg1, const char *arg2)
 
 /* сервисные кнопки — вертикальным столбиком внизу */
 #define NBAR 3
-static const char *bar_label[NBAR] = { " Console ", " Reboot ", " Off " };
+static const char *bar_label[NBAR] = { " Console ", " Reboot ", " PowerOff " };
 
 static void draw_buttons(int sel, int x0)
 {
@@ -152,7 +153,7 @@ static void draw(int sel)
 
     /* hostname и ip — в левом верхнем углу */
     get_info(info, sizeof info);
-    attrset(COLOR_PAIR(C_INFO));
+    attrset(COLOR_PAIR(C_HOST));
     mvaddstr(0, 1, info);
 
     if (!nsrv) {
@@ -242,6 +243,7 @@ int main(void)
     init_pair(C_BAR,  COLOR_BLACK, COLOR_CYAN);
     init_pair(C_KEY,  COLOR_WHITE, COLOR_BLACK);
     init_pair(C_INFO, COLOR_BLUE,  COLOR_BLACK);
+    init_pair(C_HOST, COLOR_YELLOW, COLOR_BLACK);
     bkgd(COLOR_PAIR(C_NORM));
     cbreak();
     noecho();
