@@ -76,6 +76,8 @@ connect() {
     rm -f /tmp/rdp-status
     # X живёт только пока идёт RDP-сессия; вышел из Windows — вернулся в меню
     xinit /usr/bin/tc-session "$1" -- -nolisten tcp >/var/log/xsession.log 2>&1
+    # если X умер грязно и оставил VT в графическом режиме — вернуть консоль
+    chvt 1 2>/dev/null
 
     rc=$(cat /tmp/rdp-status 2>/dev/null)
     if [ -z "$rc" ]; then
