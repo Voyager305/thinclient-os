@@ -39,7 +39,10 @@ BR2_PACKAGE_DIALOG=y
 BR2_PACKAGE_NCURSES_WCHAR=y
 BR2_PACKAGE_KBD=y
 
-# bash для пункта «Консоль Linux»
+# bash для пункта «Консоль Linux».
+# SHOW_OTHERS обязателен: без него Kconfig молча выбрасывает bash
+# как «дубликат» busybox-шелла
+BR2_PACKAGE_BUSYBOX_SHOW_OTHERS=y
 BR2_PACKAGE_BASH=y
 
 # TLS-сертификаты (если захочется убрать /cert:ignore)
