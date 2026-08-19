@@ -1,0 +1,28 @@
+#!/bin/sh
+# Поднимает сеть на всех интерфейсах, у которых её ещё нет, и ставит
+# hostname tc-<mac без разделителей> по первому живому интерфейсу.
+# Идемпотентный: зовётся из S40network при старте и из меню, пока сети нет.
+
+for path in /sys/class/net/*; do
+    iface=$(basename "$path")
+    [ "$iface" = "lo" ] && continue
+    mac=$(tr -d ':\n' < "$path/address" 2>/dev/null)
+
+    # настоящий MAC: 12 hex-символов и не все нули
+    case "$mac" in
+        ????????????) case "$mac" in *[!0]*) ;; *) continue ;; esac ;;
+        *) continue ;;
+    esac
+
+    if [ "$(hostname)" = "thinclient" ]; then
+        hostname "tc-$mac"
+        echo "tc-$mac" > /etc/hostname
+    fi
+
+    ip link set "$iface" up
+    # DHCP-клиент на интерфейс — один
+    if ! pgrep -f "udhcpc -i $iface" >/dev/null 2>&1; then
+        udhcpc -i "$iface" -b -t 5 -A 10 \
+            -x hostname:"$(hostname)" >/dev/null 2>&1 &
+    fi
+done

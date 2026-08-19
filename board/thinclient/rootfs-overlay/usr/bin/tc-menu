@@ -20,6 +20,8 @@ MENU_W=64
 update_backtitle() {
     ipaddr=$(ip -4 -o addr show scope global 2>/dev/null \
         | awk 'NR==1{sub("/.*","",$4); print $4}')
+    # сети ещё нет — пробуем поднять (интерфейс мог появиться позже загрузки)
+    [ -z "$ipaddr" ] && /usr/bin/tc-netup 2>/dev/null
     BACKTITLE="MCBU | $(hostname) | ${ipaddr:-no ip}"
 }
 
