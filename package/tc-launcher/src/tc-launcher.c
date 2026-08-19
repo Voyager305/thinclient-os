@@ -108,31 +108,21 @@ static void write_choice(const char *fmt, const char *arg1, const char *arg2)
     fclose(f);
 }
 
-/* нижняя полоса: Console | Reboot | Off; по ней ходят стрелками */
+/* сервисные кнопки — вертикальным столбиком внизу */
 #define NBAR 3
 static const char *bar_label[NBAR] = { " Console ", " Reboot ", " Off " };
 
-static void draw_bar(int focused, int bsel)
+static void draw_buttons(int sel, int x0)
 {
-    char info[160];
-    int y = LINES - 1;
-    int x = 1;
+    int base = LINES - 1 - NBAR;
     int i;
 
-    attrset(COLOR_PAIR(C_NORM));
-    mvhline(y, 0, ' ', COLS);
     for (i = 0; i < NBAR; i++) {
-        if (focused && i == bsel)
-            attrset(COLOR_PAIR(C_BAR) | A_BOLD);
+        if (sel == nsrv + 1 + i)
+            attrset(COLOR_PAIR(C_SEL));
         else
             attrset(COLOR_PAIR(C_IP));
-        mvaddstr(y, x, bar_label[i]);
-        x += (int)strlen(bar_label[i]) + 2;
-    }
-    get_info(info, sizeof info);
-    if ((int)strlen(info) + 2 < COLS - x) {
-        attrset(COLOR_PAIR(C_INFO));
-        mvaddstr(y, COLS - (int)strlen(info) - 2, info);
+        mvaddstr(base + i, x0 + 1, bar_label[i]);
     }
     attrset(COLOR_PAIR(C_NORM));
 }
@@ -144,11 +134,11 @@ static void draw_bar(int focused, int bsel)
  */
 static void draw(int sel)
 {
+    char info[160];
     int gap = nsrv ? 1 : 0;
     int height = nsrv + gap + 1;
     int top = (LINES - 1 - height) / 2;
     int x0 = (COLS - LIST_W) / 2;
-    int in_bar = sel > nsrv;
     int i, y;
 
     if (top < 1)
@@ -157,6 +147,11 @@ static void draw(int sel)
         x0 = 0;
 
     erase();
+
+    /* hostname и ip — в левом верхнем углу */
+    get_info(info, sizeof info);
+    attrset(COLOR_PAIR(C_INFO));
+    mvaddstr(0, 1, info);
 
     if (!nsrv) {
         attrset(COLOR_PAIR(C_INFO));
@@ -180,7 +175,7 @@ static void draw(int sel)
         mvhline(y, x0, ' ', LIST_W);
     mvaddstr(y, x0 + 1, "+ Add server");
 
-    draw_bar(in_bar, in_bar ? sel - nsrv - 1 : 0);
+    draw_buttons(sel, x0);
     refresh();
 }
 
@@ -268,17 +263,6 @@ int main(void)
         case 'j':
         case '\t':
             sel = (sel + 1) % total;
-            break;
-        /* в полосе действий работают и влево/вправо */
-        case KEY_LEFT:
-        case 'h':
-            if (sel > nsrv + 1)
-                sel--;
-            break;
-        case KEY_RIGHT:
-        case 'l':
-            if (sel > nsrv && sel < total - 1)
-                sel++;
             break;
         case '\n':
         case '\r':
