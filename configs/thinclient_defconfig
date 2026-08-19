@@ -14,6 +14,7 @@ BR2_TARGET_GENERIC_ISSUE="Thin client"
 BR2_ROOTFS_DEVICE_CREATION_DYNAMIC_EUDEV=y
 
 BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_THINCLIENT_PATH)/board/thinclient/rootfs-overlay"
+BR2_ROOTFS_POST_BUILD_SCRIPT="$(BR2_EXTERNAL_THINCLIENT_PATH)/board/thinclient/post-build.sh"
 BR2_ROOTFS_POST_IMAGE_SCRIPT="$(BR2_EXTERNAL_THINCLIENT_PATH)/board/thinclient/post-image.sh"
 
 # Ядро: дефолтный конфиг арха + наш фрагмент (fb, i915/gma500, сетевухи, vfat, usb)

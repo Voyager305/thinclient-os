@@ -137,7 +137,7 @@ board/thinclient/
     etc/inittab                    tc-menu на tty1, отладочный getty на tty2
     etc/dialogrc                   тема оформления меню
     etc/init.d/S35console          консольный шрифт с кириллицей
-    etc/init.d/S40dhcp             DHCP на всех интерфейсах
+    etc/init.d/S40network          lo + DHCP на всех интерфейсах
     etc/init.d/S50flash            монтирование флешки в /mnt/flash
     usr/bin/tc-menu                меню (dialog): серверы, добавление, консоль
     usr/bin/tc-session             запуск xfreerdp внутри X
