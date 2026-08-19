@@ -11,3 +11,7 @@ rm -f "$TARGET_DIR/etc/init.d/S40xorg"
 # S40dhcp — хвост переименования, tc-logo — убранный ASCII-логотип
 rm -f "$TARGET_DIR/etc/init.d/S40dhcp"
 rm -f "$TARGET_DIR/etc/tc-logo"
+
+# Сеть переехала на S51network (после S50flash, чтобы читать tc.conf).
+# Убираем скелетный/старый S40network, иначе сеть поднимется дважды.
+rm -f "$TARGET_DIR/etc/init.d/S40network"

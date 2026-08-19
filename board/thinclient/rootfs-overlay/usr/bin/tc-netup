@@ -1,28 +1,69 @@
 #!/bin/sh
-# Поднимает сеть на всех интерфейсах, у которых её ещё нет, и ставит
-# hostname tc-<mac без разделителей> по первому живому интерфейсу.
-# Идемпотентный: зовётся из S40network при старте и из меню, пока сети нет.
+# Поднимает сеть. Идемпотентный: зовётся из S51network (после монтирования
+# флешки, чтобы был доступен tc.conf) и из меню, пока сети нет.
+#
+# tc.conf (флешка) может задать:
+#   HOSTNAME=имя           вместо tc-<mac>
+#   STATIC_IP=ip/prefix    статика вместо DHCP (напр. 192.168.0.50/24)
+#   GATEWAY=ip             шлюз по умолчанию (для статики)
+#   DNS=ip                 nameserver (для статики)
+# Пусто/нет ключей → DHCP на всех интерфейсах (как по умолчанию).
 
-for path in /sys/class/net/*; do
-    iface=$(basename "$path")
-    [ "$iface" = "lo" ] && continue
-    mac=$(tr -d ':\n' < "$path/address" 2>/dev/null)
+CFG_HOST=$(/usr/bin/tc-getconf HOSTNAME)
+CFG_IP=$(/usr/bin/tc-getconf STATIC_IP)
+CFG_GW=$(/usr/bin/tc-getconf GATEWAY)
+CFG_DNS=$(/usr/bin/tc-getconf DNS)
 
-    # настоящий MAC: 12 hex-символов и не все нули
-    case "$mac" in
-        ????????????) case "$mac" in *[!0]*) ;; *) continue ;; esac ;;
-        *) continue ;;
-    esac
+# первый интерфейс с настоящим MAC (12 hex, не все нули)
+first_iface() {
+    for path in /sys/class/net/*; do
+        iface=$(basename "$path")
+        [ "$iface" = "lo" ] && continue
+        mac=$(tr -d ':\n' < "$path/address" 2>/dev/null)
+        case "$mac" in
+            ????????????) case "$mac" in *[!0]*) echo "$iface"; return 0 ;; esac ;;
+        esac
+    done
+    return 1
+}
 
-    if [ "$(hostname)" = "thinclient" ]; then
-        hostname "tc-$mac"
-        echo "tc-$mac" > /etc/hostname
+# hostname (один раз, пока не задан)
+if [ "$(hostname)" = "thinclient" ]; then
+    if [ -n "$CFG_HOST" ]; then
+        NEWHOST="$CFG_HOST"
+    else
+        mac=$(tr -d ':\n' < "/sys/class/net/$(first_iface)/address" 2>/dev/null)
+        [ -n "$mac" ] && NEWHOST="tc-$mac"
     fi
+    if [ -n "$NEWHOST" ]; then
+        hostname "$NEWHOST"
+        echo "$NEWHOST" > /etc/hostname
+    fi
+fi
 
+if [ -n "$CFG_IP" ]; then
+    # --- статика: на первый интерфейс, DHCP не запускаем ---
+    iface=$(first_iface) || exit 0
     ip link set "$iface" up
-    # DHCP-клиент на интерфейс — один
-    if ! pgrep -f "udhcpc -i $iface" >/dev/null 2>&1; then
-        udhcpc -i "$iface" -b -t 5 -A 10 \
-            -x hostname:"$(hostname)" >/dev/null 2>&1 &
+    if ! ip -4 addr show dev "$iface" | grep -q "${CFG_IP%%/*}"; then
+        ip addr add "$CFG_IP" dev "$iface" 2>/dev/null
     fi
-done
+    if [ -n "$CFG_GW" ]; then
+        ip route replace default via "$CFG_GW" 2>/dev/null
+    fi
+    if [ -n "$CFG_DNS" ]; then
+        echo "nameserver $CFG_DNS" > /etc/resolv.conf
+    fi
+else
+    # --- DHCP на всех проводных интерфейсах ---
+    for path in /sys/class/net/*; do
+        iface=$(basename "$path")
+        [ "$iface" = "lo" ] && continue
+        ip link set "$iface" up
+        # DHCP-клиент на интерфейс — один
+        if ! pgrep -f "udhcpc -i $iface" >/dev/null 2>&1; then
+            udhcpc -i "$iface" -b -t 5 -A 10 \
+                -x hostname:"$(hostname)" >/dev/null 2>&1 &
+        fi
+    done
+fi
