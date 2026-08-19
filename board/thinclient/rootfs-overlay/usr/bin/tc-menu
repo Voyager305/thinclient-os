@@ -6,6 +6,7 @@
 CONF=/mnt/flash/servers.conf
 PASS_FILE=/mnt/flash/shell.pass
 OUT=/tmp/tc-choice
+TAB=$(printf '\t')
 export TERM=linux
 
 save_server() {
@@ -31,6 +32,33 @@ save_server() {
     fi
     mount -o remount,ro /mnt/flash 2>/dev/null
 }
+
+# Перезаписать servers.conf: строку, ТОЧНО совпадающую с $1, заменить на $2
+# (пусто → удалить). Остальные строки (в т.ч. комментарии) сохраняются как есть.
+_rewrite_conf() {
+    old=$1; new=$2
+    [ -f "$CONF" ] || return
+    if ! mount -o remount,rw /mnt/flash 2>/dev/null; then
+        clear
+        echo "Read-only media — cannot modify the server list."
+        sleep 2
+        return
+    fi
+    tmp="$CONF.tmp"
+    while IFS= read -r ln || [ -n "$ln" ]; do
+        cur=$(printf '%s' "$ln" | tr -d '\r')
+        if [ "$cur" = "$old" ]; then
+            [ -n "$new" ] && printf '%s\r\n' "$new"
+        else
+            printf '%s\n' "$ln"
+        fi
+    done < "$CONF" > "$tmp"
+    mv "$tmp" "$CONF" 2>/dev/null && sync
+    mount -o remount,ro /mnt/flash 2>/dev/null
+}
+
+delete_server() { _rewrite_conf "$1" ""; }      # $1 = "name;ip"
+edit_server()   { _rewrite_conf "$1" "$2"; }     # $1 = старое, $2 = новое
 
 # Консоль по умолчанию БЕЗ пароля. Админ может её запаролить: положить на
 # флешку shell.pass с sha256-хэшем пароля — тогда консоль спросит его.
@@ -133,6 +161,15 @@ while true; do
             name=${entry%%;*}
             addr=${entry#*;}
             [ -n "$name" ] && [ -n "$addr" ] && save_server "$name" "$addr"
+            ;;
+        DELETE\ *)
+            delete_server "${action#DELETE }"
+            ;;
+        EDIT\ *)
+            rest=${action#EDIT }
+            old=${rest%%"$TAB"*}
+            new=${rest#*"$TAB"}
+            [ "$old" != "$new" ] && edit_server "$old" "$new"
             ;;
         SHELL)
             open_shell

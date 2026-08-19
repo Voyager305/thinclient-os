@@ -180,15 +180,23 @@ static void draw(int sel)
         mvhline(y, x0, ' ', LIST_W);
     mvaddstr(y, x0 + 1, "+ Add server");
 
+    /* подсказка действий над выбранным сервером */
+    if (nsrv && sel < nsrv) {
+        attrset(COLOR_PAIR(C_INFO));
+        mvaddstr(LINES - 1, 1, "Enter connect   e edit   d delete");
+    }
+
     draw_buttons(sel, x0);
     refresh();
 }
 
-/* простое поле ввода по центру; пустая строка = отмена */
-static int prompt(const char *label, char *buf, int n)
+/* поле ввода по центру.
+ *   allow_empty=0: пустая строка = отмена (возврат 0);
+ *   allow_empty=1: пустая строка допустима (возврат 1, buf==""). */
+static int prompt(const char *label, char *buf, int n, int allow_empty)
 {
     int y = LINES / 2;
-    int x = (COLS - 40) / 2;
+    int x = (COLS - 44) / 2;
     int r;
 
     if (x < 0)
@@ -197,7 +205,7 @@ static int prompt(const char *label, char *buf, int n)
     erase();
     mvaddstr(y - 1, x, label);
     attrset(COLOR_PAIR(C_INFO));
-    mvaddstr(y + 2, x, "empty input cancels");
+    mvaddstr(y + 2, x, allow_empty ? "empty = keep current" : "empty input cancels");
     attrset(COLOR_PAIR(C_NORM));
     move(y, x);
     echo();
@@ -209,16 +217,19 @@ static int prompt(const char *label, char *buf, int n)
     timeout(1000);
     noecho();
     curs_set(0);
-    return r != ERR && buf[0] != 0;
+    if (r == ERR)
+        return 0;
+    return allow_empty || buf[0] != 0;
 }
 
-/* убрать из поля символы, ломающие формат "имя;ip" */
-static void strip_semicolons(char *s)
+/* убрать из поля символы, ломающие формат "имя;ip" и протокол:
+ * ';' (разделитель), а также tab и любые control-символы. */
+static void strip_bad(char *s)
 {
     char *p, *q;
 
     for (p = q = s; *p; p++)
-        if (*p != ';')
+        if (*p != ';' && (unsigned char)*p >= 0x20)
             *q++ = *p;
     *q = 0;
 }
@@ -227,10 +238,10 @@ static int do_add(void)
 {
     char name[64], ip[64];
 
-    if (prompt("Server name:", name, sizeof name) &&
-        prompt("IP address (ip or ip:port):", ip, sizeof ip)) {
-        strip_semicolons(name);
-        strip_semicolons(ip);
+    if (prompt("Server name:", name, sizeof name, 0) &&
+        prompt("IP address (ip or ip:port):", ip, sizeof ip, 0)) {
+        strip_bad(name);
+        strip_bad(ip);
         if (!name[0] || !ip[0])
             return 0;
         endwin();
@@ -238,6 +249,57 @@ static int do_add(void)
         return 1;
     }
     return 0;
+}
+
+/* редактировать сервер i: пустое поле = оставить старое значение.
+ * Пишем "EDIT old_name;old_ip \t new_name;new_ip" (tab-разделитель). */
+static int do_edit(int i)
+{
+    char name[64] = "", ip[64] = "";
+    char lbl1[128], lbl2[128], oldp[136], newp[136];
+
+    snprintf(lbl1, sizeof lbl1, "New name [%s]:", servers[i].name);
+    snprintf(lbl2, sizeof lbl2, "New IP [%s]:", servers[i].ip);
+    if (!prompt(lbl1, name, sizeof name, 1))
+        return 0;
+    if (!prompt(lbl2, ip, sizeof ip, 1))
+        return 0;
+    strip_bad(name);
+    strip_bad(ip);
+    if (!name[0])
+        snprintf(name, sizeof name, "%s", servers[i].name);
+    if (!ip[0])
+        snprintf(ip, sizeof ip, "%s", servers[i].ip);
+    snprintf(oldp, sizeof oldp, "%s;%s", servers[i].name, servers[i].ip);
+    snprintf(newp, sizeof newp, "%s;%s", name, ip);
+    endwin();
+    write_choice("EDIT %s\t%s", oldp, newp);
+    return 1;
+}
+
+/* удалить сервер i с подтверждением */
+static int do_delete(int i)
+{
+    char oldp[136];
+    int y = LINES / 2, x = (COLS - 44) / 2, c;
+
+    if (x < 0)
+        x = 0;
+    attrset(COLOR_PAIR(C_NORM));
+    erase();
+    mvprintw(y, x, "Delete server \"%s\" (%s)?", servers[i].name, servers[i].ip);
+    attrset(COLOR_PAIR(C_INFO));
+    mvaddstr(y + 2, x, "y = delete, any other key = cancel");
+    refresh();
+    timeout(-1);
+    c = getch();
+    timeout(1000);
+    if (c != 'y' && c != 'Y')
+        return 0;
+    snprintf(oldp, sizeof oldp, "%s;%s", servers[i].name, servers[i].ip);
+    endwin();
+    write_choice("DELETE %s", oldp, NULL);
+    return 1;
 }
 
 static void bar_action(int bsel)
@@ -304,6 +366,17 @@ int main(void)
             }
             bar_action(sel - nsrv - 1);
             return 0;
+        case 'e':
+        case 'E':
+            if (sel < nsrv && do_edit(sel))
+                return 0;
+            break;
+        case 'd':
+        case 'D':
+        case KEY_DC:
+            if (sel < nsrv && do_delete(sel))
+                return 0;
+            break;
         /* F-клавиши оставлены как шорткаты */
         case KEY_F(2):
             if (do_add())
