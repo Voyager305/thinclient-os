@@ -68,9 +68,10 @@ BR2_PACKAGE_CUPS=y
 BR2_PACKAGE_USBUTILS=y
 
 # Первая загрузка с ISO-флешки: создание конфиг-раздела TCDATA
-# в свободном месте (sfdisk) и его форматирование (mkfs.vfat)
+# в свободном месте (sfdisk из util-linux basic set — отдельной опции
+# для sfdisk у Buildroot нет) и его форматирование (mkfs.vfat)
 BR2_PACKAGE_UTIL_LINUX=y
-BR2_PACKAGE_UTIL_LINUX_SFDISK=y
+BR2_PACKAGE_UTIL_LINUX_BINARIES=y
 BR2_PACKAGE_DOSFSTOOLS=y
 BR2_PACKAGE_DOSFSTOOLS_MKFS_FAT=y
 
