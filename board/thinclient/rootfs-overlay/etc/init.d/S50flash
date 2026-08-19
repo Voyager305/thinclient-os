@@ -1,37 +1,110 @@
 #!/bin/sh
-# Монтирует носитель с servers.conf в /mnt/flash:
-#  - флешка с usb.img — FAT32, конфиг читается и пишется;
-#  - ISO (CD в VirtualBox или флешка, залитая ISO'шником) — только чтение.
-# Держим read-only, на запись перемонтируемся только в момент сохранения (см. tc-menu).
-try_mount() {
-    for dev in /dev/sd[a-z]1 /dev/sd[a-z] /dev/mmcblk[0-9]p1 /dev/sr[0-9]; do
+# Монтирует носитель с конфигами в /mnt/flash. Приоритет:
+#  1) писабельный FAT-раздел с servers.conf — usb.img или раздел TCDATA;
+#  2) ISO-флешка без конфиг-раздела: первая загрузка — создаём в свободном
+#     месте раздел TCDATA (sfdisk), форматируем и переносим стартовый конфиг;
+#  3) CD в виртуалке (или разметка не удалась) — читаем конфиг с ISO, read-only.
+# /mnt/flash всегда смонтирован ro; на запись перемонтируется tc-menu.
+
+MNT=/mnt/flash
+TMP=/tmp/iso-src
+SEED=/tmp/servers.seed
+
+find_vfat() {
+    for dev in /dev/sd[a-z][0-9] /dev/mmcblk[0-9]p[0-9]; do
         [ -b "$dev" ] || continue
-        for fs in vfat iso9660; do
-            if mount -t "$fs" -o ro "$dev" /mnt/flash 2>/dev/null; then
-                if [ -f /mnt/flash/servers.conf ]; then
-                    return 0
-                fi
-                umount /mnt/flash
-            fi
-        done
+        if mount -t vfat -o ro "$dev" "$MNT" 2>/dev/null; then
+            [ -f "$MNT/servers.conf" ] && return 0
+            umount "$MNT"
+        fi
     done
     return 1
 }
 
+# найти ISO-носитель с конфигом; печатает устройство, монтирует его в $TMP
+find_iso() {
+    for dev in /dev/sr[0-9] /dev/sd[a-z]1 /dev/sd[a-z]; do
+        [ -b "$dev" ] || continue
+        if mount -t iso9660 -o ro "$dev" "$TMP" 2>/dev/null; then
+            if [ -f "$TMP/servers.conf" ]; then
+                echo "$dev"
+                return 0
+            fi
+            umount "$TMP"
+        fi
+    done
+    return 1
+}
+
+# создать/починить конфиг-раздел на диске с ISO; $1 = устройство ISO
+make_data_part() {
+    disk=${1%[0-9]}
+    case "$disk" in
+        */sr*) return 1 ;;      # CD не разметишь
+    esac
+    [ -b "$disk" ] || return 1
+    part="${disk}2"
+
+    if [ ! -b "$part" ]; then
+        command -v sfdisk >/dev/null 2>&1 || return 1
+        command -v mkfs.vfat >/dev/null 2>&1 || return 1
+        # раздел на всё свободное место, тип c = FAT32 (LBA)
+        echo ',,c' | sfdisk --append "$disk" >/dev/null 2>&1 || return 1
+        blockdev --rereadpt "$disk" 2>/dev/null
+        n=0
+        while [ ! -b "$part" ] && [ "$n" -lt 25 ]; do
+            n=$((n + 1))
+            sleep 0.2
+        done
+        [ -b "$part" ] || return 1
+        mkfs.vfat -n TCDATA "$part" >/dev/null 2>&1 || return 1
+    fi
+
+    # свежесозданный или недосеянный раздел: кладём стартовый конфиг
+    mount -t vfat "$part" "$MNT" 2>/dev/null || return 1
+    if [ ! -f "$MNT/servers.conf" ]; then
+        cp "$SEED" "$MNT/servers.conf" 2>/dev/null || {
+            umount "$MNT"
+            return 1
+        }
+        sync
+    fi
+    mount -o remount,ro "$MNT"
+    return 0
+}
+
 case "$1" in
     start)
-        mkdir -p /mnt/flash
-        # ждём, пока ядро увидит USB-накопитель (на старых EHCI бывает не мгновенно)
+        mkdir -p "$MNT" "$TMP"
+        iso_dev=""
+        # ждём носитель (на старых EHCI USB бывает не мгновенно)
         for i in 1 2 3 4 5 6 7 8 9 10; do
-            if try_mount; then
+            if find_vfat; then
                 psplash-write "PROGRESS 85" 2>/dev/null
                 exit 0
             fi
+            iso_dev=$(find_iso) && break
             sleep 1
         done
-        echo "S50flash: носитель с servers.conf не найден" >&2
+        if [ -z "$iso_dev" ]; then
+            echo "S50flash: носитель с servers.conf не найден" >&2
+            exit 0
+        fi
+
+        # конфиг с ISO пригодится как затравка; отмонтируем перед разметкой,
+        # иначе ядро не перечитает таблицу разделов
+        cp "$TMP/servers.conf" "$SEED" 2>/dev/null
+        umount "$TMP"
+
+        if make_data_part "$iso_dev"; then
+            echo "S50flash: конфиг-раздел TCDATA готов" >&2
+        else
+            # CD в виртуалке или разметка не удалась — читаем с ISO
+            mount -t iso9660 -o ro "$iso_dev" "$MNT" 2>/dev/null
+        fi
+        psplash-write "PROGRESS 85" 2>/dev/null
         ;;
     stop)
-        umount /mnt/flash 2>/dev/null
+        umount "$MNT" 2>/dev/null
         ;;
 esac

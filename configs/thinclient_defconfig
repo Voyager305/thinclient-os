@@ -67,6 +67,13 @@ BR2_PACKAGE_TCPDUMP=y
 BR2_PACKAGE_CUPS=y
 BR2_PACKAGE_USBUTILS=y
 
+# Первая загрузка с ISO-флешки: создание конфиг-раздела TCDATA
+# в свободном месте (sfdisk) и его форматирование (mkfs.vfat)
+BR2_PACKAGE_UTIL_LINUX=y
+BR2_PACKAGE_UTIL_LINUX_SFDISK=y
+BR2_PACKAGE_DOSFSTOOLS=y
+BR2_PACKAGE_DOSFSTOOLS_MKFS_FAT=y
+
 # rootfs целиком в RAM: initramfs cpio+gzip, никакого раздела с системой
 BR2_TARGET_ROOTFS_CPIO=y
 BR2_TARGET_ROOTFS_CPIO_GZIP=y
