@@ -108,29 +108,26 @@ static void write_choice(const char *fmt, const char *arg1, const char *arg2)
     fclose(f);
 }
 
-static void draw_bar(void)
+/* нижняя полоса: Console | Reboot | Off; по ней ходят стрелками */
+#define NBAR 3
+static const char *bar_label[NBAR] = { " Console ", " Reboot ", " Off " };
+
+static void draw_bar(int focused, int bsel)
 {
-    static const struct { const char *key, *label; } seg[] = {
-        { "Enter", " Connect " },
-        { "F2",    " Add " },
-        { "F3",    " Console " },
-        { "F4",    " Reboot " },
-        { "F5",    " Off " },
-    };
     char info[160];
     int y = LINES - 1;
     int x = 1;
-    size_t i;
+    int i;
 
     attrset(COLOR_PAIR(C_NORM));
     mvhline(y, 0, ' ', COLS);
-    for (i = 0; i < sizeof seg / sizeof seg[0]; i++) {
-        attrset(COLOR_PAIR(C_KEY) | A_BOLD);
-        mvaddstr(y, x, seg[i].key);
-        x += (int)strlen(seg[i].key);
-        attrset(COLOR_PAIR(C_BAR));
-        mvaddstr(y, x, seg[i].label);
-        x += (int)strlen(seg[i].label) + 2;
+    for (i = 0; i < NBAR; i++) {
+        if (focused && i == bsel)
+            attrset(COLOR_PAIR(C_BAR) | A_BOLD);
+        else
+            attrset(COLOR_PAIR(C_IP));
+        mvaddstr(y, x, bar_label[i]);
+        x += (int)strlen(bar_label[i]) + 2;
     }
     get_info(info, sizeof info);
     if ((int)strlen(info) + 2 < COLS - x) {
@@ -140,12 +137,13 @@ static void draw_bar(void)
     attrset(COLOR_PAIR(C_NORM));
 }
 
-static void draw(int sel)
+static void draw(int focus_bar, int sel, int bsel)
 {
     int gap = nsrv ? 1 : 0;
     int height = nsrv + gap + 1;
     int top = (LINES - 1 - height) / 2;
     int x0 = (COLS - LIST_W) / 2;
+    int list_focused = !focus_bar;
     int i, y;
 
     if (top < 1)
@@ -162,22 +160,23 @@ static void draw(int sel)
 
     for (i = 0; i < nsrv; i++) {
         y = top + i;
-        attrset(COLOR_PAIR(i == sel ? C_SEL : C_NORM));
+        attrset(COLOR_PAIR(list_focused && i == sel ? C_SEL : C_NORM));
         mvhline(y, x0, ' ', LIST_W);
         mvaddnstr(y, x0 + 1, servers[i].name, NAME_W);
-        if (i != sel)
+        if (!(list_focused && i == sel))
             attrset(COLOR_PAIR(C_IP));
         mvaddstr(y, x0 + LIST_W - (int)strlen(servers[i].ip) - 1,
                  servers[i].ip);
     }
 
     y = top + nsrv + gap;
-    attrset(sel == nsrv ? COLOR_PAIR(C_SEL) : COLOR_PAIR(C_INFO));
-    if (sel == nsrv)
+    attrset(list_focused && sel == nsrv ? COLOR_PAIR(C_SEL)
+                                        : COLOR_PAIR(C_INFO));
+    if (list_focused && sel == nsrv)
         mvhline(y, x0, ' ', LIST_W);
     mvaddstr(y, x0 + 1, "+ Add server");
 
-    draw_bar();
+    draw_bar(focus_bar, bsel);
     refresh();
 }
 
@@ -205,9 +204,32 @@ static int prompt(const char *label, char *buf, int n)
     return r != ERR && buf[0] != 0;
 }
 
+static int do_add(void)
+{
+    char name[64], ip[64];
+
+    if (prompt("Server name:", name, sizeof name) &&
+        prompt("IP address (ip or ip:port):", ip, sizeof ip)) {
+        endwin();
+        write_choice("ADD %s;%s", name, ip);
+        return 1;
+    }
+    return 0;
+}
+
+static void bar_action(int bsel)
+{
+    static const char *act[NBAR] = { "SHELL", "REBOOT", "OFF" };
+
+    endwin();
+    write_choice(act[bsel], NULL, NULL);
+}
+
 int main(void)
 {
-    int sel = 0;
+    int sel = 0;        /* позиция в списке */
+    int bsel = 0;       /* позиция в нижней полосе */
+    int focus_bar = 0;  /* 0 — список, 1 — полоса действий */
     int total;
 
     load_servers();
@@ -231,51 +253,77 @@ int main(void)
     for (;;) {
         int c;
 
-        draw(sel);
+        draw(focus_bar, sel, bsel);
         c = getch();
         switch (c) {
         case ERR:
             break;
         case KEY_UP:
         case 'k':
-            sel = (sel + total - 1) % total;
+            if (focus_bar)
+                focus_bar = 0, sel = total - 1;
+            else if (sel > 0)
+                sel--;
+            else
+                focus_bar = 1;
             break;
         case KEY_DOWN:
         case 'j':
+            if (!focus_bar) {
+                if (sel < total - 1)
+                    sel++;
+                else
+                    focus_bar = 1;
+            } else {
+                focus_bar = 0;
+                sel = 0;
+            }
+            break;
+        case KEY_LEFT:
+        case 'h':
+            if (focus_bar)
+                bsel = (bsel + NBAR - 1) % NBAR;
+            else
+                focus_bar = 1;
+            break;
+        case KEY_RIGHT:
+        case 'l':
+            if (focus_bar)
+                bsel = (bsel + 1) % NBAR;
+            else
+                focus_bar = 1;
+            break;
         case '\t':
-            sel = (sel + 1) % total;
+            focus_bar = !focus_bar;
             break;
         case '\n':
         case '\r':
         case KEY_ENTER:
+            if (focus_bar) {
+                bar_action(bsel);
+                return 0;
+            }
             if (sel < nsrv) {
                 endwin();
                 write_choice("CONNECT %s", servers[sel].ip, NULL);
                 return 0;
             }
-            /* fallthrough: Enter на "+ Add server" */
-        case KEY_F(2): {
-            char name[64], ip[64];
-
-            if (prompt("Server name:", name, sizeof name) &&
-                prompt("IP address (ip or ip:port):", ip, sizeof ip)) {
-                endwin();
-                write_choice("ADD %s;%s", name, ip);
+            if (do_add())
                 return 0;
-            }
             break;
-        }
+        /* F-клавиши оставлены как шорткаты */
+        case KEY_F(2):
+            if (do_add())
+                return 0;
+            break;
         case KEY_F(3):
-            endwin();
-            write_choice("SHELL", NULL, NULL);
+            bar_action(0);
             return 0;
         case KEY_F(4):
-            endwin();
-            write_choice("REBOOT", NULL, NULL);
+            bar_action(1);
             return 0;
         case KEY_F(5):
-            endwin();
-            write_choice("OFF", NULL, NULL);
+            bar_action(2);
             return 0;
         default:
             break;
