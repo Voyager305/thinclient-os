@@ -44,6 +44,9 @@ open_shell() {
     check_pass || return
     clear
     echo "=== Linux console (root). Back to menu: exit or Ctrl-D ==="
+    echo "Flash is mounted read-only. To edit files on it use:"
+    echo "  tc-edit            edit servers.conf"
+    echo "  tc-edit <file>     edit any file on /mnt/flash"
     # HOME обязателен: без него bash -l не найдёт /root/.bash_profile
     # и останется с голым PS1='# ' из скелетного /etc/profile
     export HOME=/root

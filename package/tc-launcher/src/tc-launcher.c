@@ -200,7 +200,11 @@ static int prompt(const char *label, char *buf, int n)
     move(y, x);
     echo();
     curs_set(1);
+    /* блокирующий ввод: общий секундный таймаут перерисовки иначе
+       обрывает getnstr через 1с и это выглядит как отмена */
+    timeout(-1);
     r = getnstr(buf, n - 1);
+    timeout(1000);
     noecho();
     curs_set(0);
     return r != ERR && buf[0] != 0;

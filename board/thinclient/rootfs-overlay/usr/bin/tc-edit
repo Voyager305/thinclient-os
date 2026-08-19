@@ -1,0 +1,20 @@
+#!/bin/sh
+# Правка файлов на флешке. Она смонтирована read-only (защита FAT от
+# выдёргивания), поэтому: перемонтировать rw -> редактор -> sync -> ro.
+# Использование: tc-edit [файл]    (по умолчанию servers.conf)
+
+FILE=${1:-servers.conf}
+case "$FILE" in
+    /*) ;;
+    *)  FILE=/mnt/flash/$FILE ;;
+esac
+
+if ! mount -o remount,rw /mnt/flash 2>/dev/null; then
+    echo "tc-edit: cannot remount /mnt/flash read-write (ISO/CD media?)" >&2
+    exit 1
+fi
+
+${EDITOR:-nano} "$FILE"
+sync
+mount -o remount,ro /mnt/flash 2>/dev/null
+echo "tc-edit: saved, flash is read-only again"
