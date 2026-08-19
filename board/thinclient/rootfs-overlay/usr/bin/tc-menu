@@ -62,8 +62,32 @@ open_shell() {
 connect() {
     clear
     echo "Connecting to $1 ..."
+    rm -f /tmp/rdp-status
     # X живёт только пока идёт RDP-сессия; вышел из Windows — вернулся в меню
     xinit /usr/bin/tc-session "$1" -- -nolisten tcp >/var/log/xsession.log 2>&1
+
+    rc=$(cat /tmp/rdp-status 2>/dev/null)
+    if [ -z "$rc" ]; then
+        # до xfreerdp дело не дошло — не поднялся сам X
+        connect_error "$1" "X server failed to start"
+    elif [ "$rc" != 0 ]; then
+        connect_error "$1" "xfreerdp exited with code $rc"
+    fi
+}
+
+connect_error() {
+    clear
+    echo "=== Connection to $1 failed ($2) ==="
+    echo
+    echo "Last errors from /var/log/xsession.log:"
+    grep -iE 'ERR|error|denied|refused|timeout|unreachable|failed' \
+        /var/log/xsession.log | tail -6
+    echo
+    echo "Check: server address, network cable, ip in the corner of the menu."
+    echo "Full log: console -> less /var/log/xsession.log"
+    echo
+    printf "Press Enter to return to the menu..."
+    read -r _
 }
 
 while true; do

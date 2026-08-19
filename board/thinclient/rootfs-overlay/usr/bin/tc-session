@@ -5,5 +5,11 @@
 #   /dynamic-resolution  — сессия подстраивается при смене разрешения
 #   /printer             — проброс принтеров клиента (CUPS) в сессию
 #   /bpp:16 разгружает старые Атомы; убери, если нужна полная цветность.
-exec xfreerdp /f /v:"$1" /cert:ignore /bpp:16 +clipboard \
+# Код выхода xfreerdp уходит в /tmp/rdp-status — по нему tc-menu понимает,
+# что подключение не удалось, и показывает экран ошибки.
+
+xfreerdp /f /v:"$1" /cert:ignore /bpp:16 +clipboard \
     /dynamic-resolution /printer
+rc=$?
+echo "$rc" > /tmp/rdp-status
+exit "$rc"
