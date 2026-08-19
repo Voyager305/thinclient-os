@@ -5,4 +5,5 @@ set backspace=indent,eol,start
 set ruler
 set showcmd
 set nowrap
-syntax off
+" ни syntax on, ни syntax off тут писать нельзя: обе команды сорсят
+" runtime-файлы, которых в образе нет (vim собран без runtime)
