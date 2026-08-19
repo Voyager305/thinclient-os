@@ -3,20 +3,18 @@
 # Список серверов — /mnt/flash/servers.conf (FAT-раздел флешки), формат: имя;ip
 # Тема оформления — /etc/dialogrc. UI на английском: кириллица в текстовой
 # консоли рендерится ненадёжно (локали в минимальном glibc), ASCII — везде ровно.
+#
+# Раскладка: окно на весь экран, серверы и Add server — в списке,
+# сервисные действия — кнопками внизу: Connect | Console | Reboot | Power off.
 
 CONF=/mnt/flash/servers.conf
 PASS_FILE=/mnt/flash/shell.pass
 export TERM=linux
 export DIALOGRC=/etc/dialogrc
 
-# ASCII-логотип лежит отдельным файлом: внутри арта есть скобки/бэкслэши,
-# которые ломают heredoc в $() у старых шеллов
-LOGO=$(cat /etc/tc-logo 2>/dev/null)
-LOGO_W=34
-LOGO_H=6
 MENU_W=64
+
 # верхняя строка: MCBU | tc-<mac> | <ip>; обновляется при каждой перерисовке
-# (ASCII-разделители — UTF-8 в консоли рендерится ненадёжно)
 update_backtitle() {
     ipaddr=$(ip -4 -o addr show scope global 2>/dev/null \
         | awk 'NR==1{sub("/.*","",$4); print $4}')
@@ -85,7 +83,7 @@ connect() {
 while true; do
     update_backtitle
 
-    # пункты меню: тег = ip (скрыт через --no-tags), подпись = имя + ip
+    # пункты: тег = ip (скрыт через --no-tags), подпись = имя + ip
     set --
     if [ -f "$CONF" ]; then
         while IFS=';' read -r name ip; do
@@ -96,45 +94,40 @@ while true; do
             set -- "$@" "$ip" "$(printf '%-34s %s' "$name" "$ip")"
         done < "$CONF"
     fi
+    set -- "$@" "ADD" "[+] Add server"
 
-    # геометрия: логотип + меню, по центру экрана
+    # окно на весь экран: кнопки действий оказываются внизу экрана
     size=$(stty size 2>/dev/null)
     rows=${size%% *}; cols=${size##* }
     [ "$rows" -ge 24 ] 2>/dev/null || rows=25
     [ "$cols" -ge 80 ] 2>/dev/null || cols=80
 
-    list_h=$(( $# / 2 + 4 ))
-    max_list=$(( rows - LOGO_H - 10 ))
-    [ "$list_h" -gt "$max_list" ] && list_h=$max_list
-    [ "$list_h" -lt 5 ] && list_h=5
-    menu_h=$(( list_h + 7 ))
-
-    logo_x=$(( (cols - LOGO_W) / 2 )); [ "$logo_x" -lt 0 ] && logo_x=0
+    menu_h=$(( rows - 2 ))
+    list_h=$(( menu_h - 8 ))
     menu_x=$(( (cols - MENU_W) / 2 )); [ "$menu_x" -lt 0 ] && menu_x=0
-    logo_y=$(( (rows - LOGO_H - menu_h) / 2 )); [ "$logo_y" -lt 1 ] && logo_y=1
-    menu_y=$(( logo_y + LOGO_H ))
 
-    # --no-collapse: не схлопывать пробелы в ASCII-арте, --cr-wrap: чтить \n
-    choice=$(dialog --backtitle "$BACKTITLE" --keep-window \
-        --no-collapse --cr-wrap \
-        --begin "$logo_y" "$logo_x" --infobox "$LOGO" $LOGO_H $LOGO_W \
-        --and-widget --backtitle "$BACKTITLE" --no-cancel --no-tags \
-        --begin "$menu_y" "$menu_x" --title " Select server " \
+    choice=$(dialog --backtitle "$BACKTITLE" --no-tags \
+        --begin 1 "$menu_x" --title " Select server " \
         --ok-label "Connect" \
+        --extra-button --extra-label "Console" \
+        --help-button --help-label "Reboot" \
+        --cancel-label "Power off" \
         --menu "" "$menu_h" $MENU_W "$list_h" \
         "$@" \
-        "ADD"    "[+] Add server" \
-        "SHELL"  "[>] Linux console" \
-        "REBOOT" "[r] Reboot" \
-        "OFF"    "[o] Power off" \
         3>&1 1>&2 2>&3)
+    rc=$?
 
-    case "$choice" in
-        ADD)    add_server ;;
-        SHELL)  open_shell ;;
-        REBOOT) reboot ;;
-        OFF)    poweroff ;;
-        "")     ;;
-        *)      connect "$choice" ;;
+    case "$rc" in
+        0)  # Connect
+            case "$choice" in
+                ADD) add_server ;;
+                "")  ;;
+                *)   connect "$choice" ;;
+            esac
+            ;;
+        3)  open_shell ;;   # Console (extra)
+        2)  reboot ;;       # Reboot (help)
+        1)  poweroff ;;     # Power off (cancel)
+        *)  ;;              # ESC — перерисовать
     esac
 done

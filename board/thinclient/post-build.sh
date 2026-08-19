@@ -7,6 +7,7 @@ set -e
 # иначе пустой X перехватывает экран и меню на tty1 не видно.
 rm -f "$TARGET_DIR/etc/init.d/S40xorg"
 
-# Хвост от переименования S40dhcp -> S40network: overlay не удаляет
-# из target файлы, которые из него исчезли
+# Overlay не удаляет из target файлы, которые из него исчезли:
+# S40dhcp — хвост переименования, tc-logo — убранный ASCII-логотип
 rm -f "$TARGET_DIR/etc/init.d/S40dhcp"
+rm -f "$TARGET_DIR/etc/tc-logo"
