@@ -4,6 +4,11 @@
 CONFIG_DEVTMPFS=y
 CONFIG_DEVTMPFS_MOUNT=y
 
+# UEFI-загрузка: консоль на GOP-framebuffer от прошивки
+CONFIG_EFI=y
+CONFIG_FB_EFI=y
+CONFIG_SYSFB_SIMPLEFB=y
+
 # Графика: framebuffer-консоль для меню.
 # i915 — старые чипсеты 945GSE (Atom N270 и т.п.), даёт KMS.
 # gma500 — Poulsbo/Cedar Trail (GMA 500/600/3600/3650), KMS без ускорения — для RDP хватает.

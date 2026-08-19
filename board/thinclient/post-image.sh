@@ -12,6 +12,31 @@ set -e
 BOARD_DIR="$(cd "$(dirname "$0")" && pwd)"
 PART_MB=256
 
+# UEFI: собрать FAT-образ с grub-efi (для El Torito ISO) и уметь докладывать
+# EFI/BOOT в любой FAT. Если grub-efi не собран — тихо живём BIOS-only.
+EFI_SRC="$BINARIES_DIR/efi-part/EFI/BOOT"
+have_efi() {
+    [ -f "$EFI_SRC/bootx64.efi" ] || [ -f "$EFI_SRC/bootia32.efi" ]
+}
+
+# докладывает EFI/BOOT/{boot*.efi,grub.cfg} в FAT-образ $1 (через mtools)
+add_efi_to_fat() {
+    have_efi || return 0
+    mmd -i "$1" ::/EFI ::/EFI/BOOT 2>/dev/null || true
+    [ -f "$EFI_SRC/bootx64.efi" ]  && mcopy -o -i "$1" "$EFI_SRC/bootx64.efi"  ::/EFI/BOOT/
+    [ -f "$EFI_SRC/bootia32.efi" ] && mcopy -o -i "$1" "$EFI_SRC/bootia32.efi" ::/EFI/BOOT/
+    mcopy -o -i "$1" "$BOARD_DIR/grub-efi.cfg" ::/EFI/BOOT/grub.cfg
+}
+
+# отдельный маленький FAT для El Torito EFI-загрузки ISO
+build_efiboot_img() {
+    have_efi || return 1
+    EFIBOOT="$BINARIES_DIR/efiboot.img"
+    dd if=/dev/zero of="$EFIBOOT" bs=1M count=8 status=none
+    mkfs.vfat -F 12 -n EFIBOOT "$EFIBOOT" >/dev/null
+    add_efi_to_fat "$EFIBOOT"
+}
+
 build_img() {
     IMG="$BINARIES_DIR/usb.img"
     PART="$BINARIES_DIR/part.img"
@@ -23,6 +48,7 @@ build_img() {
     mcopy -i "$PART" "$BINARIES_DIR/rootfs.cpio.gz"   ::/initrd.gz
     mcopy -i "$PART" "$BOARD_DIR/syslinux.cfg"        ::/syslinux.cfg
     mcopy -i "$PART" "$BOARD_DIR/servers.conf.sample" ::/servers.conf
+    add_efi_to_fat "$PART"
     syslinux --install "$PART"
 
     # 2. Диск целиком: MBR-разметка, раздел с отступом 1 МиБ, boot-флаг
@@ -74,10 +100,19 @@ build_iso() {
     cp "$BOARD_DIR/syslinux.cfg"        "$ISO_DIR/isolinux/isolinux.cfg"
     cp "$ISOLINUX_BIN"                  "$ISO_DIR/isolinux/"
     [ -n "$LDLINUX" ] && cp "$LDLINUX"  "$ISO_DIR/isolinux/"
+
+    # UEFI-запись добавляется, только если grub-efi собрался
+    EFI_OPTS=""
+    if build_efiboot_img; then
+        cp "$BINARIES_DIR/efiboot.img" "$ISO_DIR/efiboot.img"
+        EFI_OPTS="-eltorito-alt-boot -e efiboot.img -no-emul-boot -isohybrid-gpt-basdat"
+    fi
+
     xorriso -as mkisofs -quiet -o "$ISO" \
         -isohybrid-mbr "$ISOHDPFX" \
         -b isolinux/isolinux.bin -c isolinux/boot.cat \
         -no-emul-boot -boot-load-size 4 -boot-info-table \
+        $EFI_OPTS \
         -V THINCLIENT "$ISO_DIR"
     rm -rf "$ISO_DIR"
     echo ">>> Готово: $ISO ($(du -h "$ISO" | cut -f1))"

@@ -61,9 +61,11 @@ BR2_PACKAGE_BASH=y
 # TLS-сертификаты (если захочется убрать /cert:ignore)
 BR2_PACKAGE_CA_CERTIFICATES=y
 
-# Прошивки для свежих Realtek-сетевух (r8169 на новых ревизиях)
+# Прошивки для свежих Realtek-сетевух: 8169 (PCI) и 8152/8153 (USB).
+# ВНИМАНИЕ: RTL_81XX — это Wi-Fi (rtlwifi), не то
 BR2_PACKAGE_LINUX_FIRMWARE=y
-BR2_PACKAGE_LINUX_FIRMWARE_RTL_81XX=y
+BR2_PACKAGE_LINUX_FIRMWARE_RTL_8169=y
+BR2_PACKAGE_LINUX_FIRMWARE_RTL_815X=y
 
 # Стандартные сетевые утилиты: ip/ss, ping/tracepath, ethtool, tcpdump
 BR2_PACKAGE_IPROUTE2=y
@@ -91,6 +93,13 @@ BR2_PACKAGE_UTIL_LINUX=y
 BR2_PACKAGE_UTIL_LINUX_BINARIES=y
 BR2_PACKAGE_DOSFSTOOLS=y
 BR2_PACKAGE_DOSFSTOOLS_MKFS_FAT=y
+
+# UEFI-загрузка (современные компы без CSM): grub-efi обеих разрядностей —
+# x64 для обычных машин, ia32 для планшетно-атомных Bay Trail
+BR2_TARGET_GRUB2=y
+BR2_TARGET_GRUB2_I386_EFI=y
+BR2_TARGET_GRUB2_X86_64_EFI=y
+BR2_TARGET_GRUB2_BUILTIN_MODULES_EFI="boot linux fat iso9660 part_msdos part_gpt normal efi_gop search search_fs_file"
 
 # rootfs целиком в RAM: initramfs cpio+gzip, никакого раздела с системой
 BR2_TARGET_ROOTFS_CPIO=y
