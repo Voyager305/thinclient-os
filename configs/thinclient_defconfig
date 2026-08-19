@@ -9,6 +9,10 @@ BR2_TOOLCHAIN_BUILDROOT_CXX=y
 
 BR2_TARGET_GENERIC_HOSTNAME="thinclient"
 BR2_TARGET_GENERIC_ISSUE="Thin client"
+# Пароль root: нужен для SSH и логина на tty2 (меню-консоль пароль
+# не спрашивает — у неё свой опциональный shell.pass). Сменить: здесь
+# или интерактивно passwd в консоли (до перезагрузки).
+BR2_TARGET_GENERIC_ROOT_PASSWD="changeme"
 
 # eudev нужен, чтобы Xorg сам находил клавиатуру/мышь/видео без ручного xorg.conf
 BR2_ROOTFS_DEVICE_CREATION_DYNAMIC_EUDEV=y
@@ -62,6 +66,15 @@ BR2_PACKAGE_IPROUTE2=y
 BR2_PACKAGE_IPUTILS=y
 BR2_PACKAGE_ETHTOOL=y
 BR2_PACKAGE_TCPDUMP=y
+
+# Удалённый доступ и админ-утилиты: sshd (dropbear, автостарт), htop,
+# mc, nano, vim (без runtime — экономия ~25 МБ; vi даёт busybox)
+BR2_PACKAGE_DROPBEAR=y
+BR2_PACKAGE_HTOP=y
+BR2_PACKAGE_MC=y
+BR2_PACKAGE_NANO=y
+BR2_PACKAGE_VIM=y
+# BR2_PACKAGE_VIM_RUNTIME is not set
 
 # Принтеры: CUPS на клиенте + канал printer в FreeRDP; lsusb для диагностики
 BR2_PACKAGE_CUPS=y
