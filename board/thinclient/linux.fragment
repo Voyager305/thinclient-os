@@ -18,12 +18,19 @@ CONFIG_AGP_INTEL=y
 CONFIG_DRM_I915=y
 CONFIG_DRM_GMA500=y
 
-# Флешка: USB + vfat
+# Флешка: USB + vfat (OHCI — USB 1.1 на старых AMD/VIA чипсетах)
 CONFIG_USB=y
 CONFIG_USB_EHCI_HCD=y
 CONFIG_USB_UHCI_HCD=y
+CONFIG_USB_OHCI_HCD=y
 CONFIG_USB_XHCI_HCD=y
 CONFIG_USB_STORAGE=y
+
+# Встроенные SD-ридеры
+CONFIG_MMC=y
+CONFIG_MMC_BLOCK=y
+CONFIG_MMC_SDHCI=y
+CONFIG_MMC_SDHCI_PCI=y
 CONFIG_VFAT_FS=y
 CONFIG_NLS_CODEPAGE_437=y
 CONFIG_NLS_ISO8859_1=y
@@ -37,13 +44,18 @@ CONFIG_BLK_DEV_SR=y
 CONFIG_DRM_BOCHS=y
 CONFIG_DRM_CIRRUS_QEMU=y
 CONFIG_DRM_VMWGFX=y
+
+# Десктопные GPU (универсальность): NVIDIA через nouveau, старые AMD через
+# radeon — нативное разрешение без ускорения; новые AMD остаются на VESA
+CONFIG_DRM_NOUVEAU=y
+CONFIG_DRM_RADEON=y
 CONFIG_VIRTIO_MENU=y
 CONFIG_VIRTIO_PCI=y
 CONFIG_DRM_VIRTIO_GPU=y
 CONFIG_VIRTIO_NET=y
 
-# Сетевухи, которые обычно стоят в атомных тонких клиентах/неттопах.
-# E1000 и PCNET32 — заодно покрывают виртуалки (VirtualBox/QEMU).
+# Сетевухи: атомные тонкие клиенты/неттопы + виртуалки + типовые десктопы
+# (универсальность: образ должен завестись на любом проводном железе)
 CONFIG_E1000=y
 CONFIG_E1000E=y
 CONFIG_E100=y
@@ -53,6 +65,20 @@ CONFIG_ATL1C=y
 CONFIG_ATL1E=y
 CONFIG_SKY2=y
 CONFIG_PCNET32=y
+CONFIG_TIGON3=y
+CONFIG_IGB=y
+CONFIG_IGC=y
+CONFIG_ALX=y
+CONFIG_VIA_RHINE=y
+CONFIG_FORCEDETH=y
+CONFIG_SKGE=y
+
+# USB-ethernet адаптеры — спасение на железе с экзотической сетевухой
+CONFIG_USB_USBNET=y
+CONFIG_USB_NET_AX8817X=y
+CONFIG_USB_NET_AX88179_178A=y
+CONFIG_USB_RTL8152=y
+CONFIG_USB_NET_CDCETHER=y
 
 # Ввод для X
 CONFIG_INPUT_EVDEV=y

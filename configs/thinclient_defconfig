@@ -61,6 +61,10 @@ BR2_PACKAGE_BASH=y
 # TLS-сертификаты (если захочется убрать /cert:ignore)
 BR2_PACKAGE_CA_CERTIFICATES=y
 
+# Прошивки для свежих Realtek-сетевух (r8169 на новых ревизиях)
+BR2_PACKAGE_LINUX_FIRMWARE=y
+BR2_PACKAGE_LINUX_FIRMWARE_RTL_81XX=y
+
 # Стандартные сетевые утилиты: ip/ss, ping/tracepath, ethtool, tcpdump
 BR2_PACKAGE_IPROUTE2=y
 BR2_PACKAGE_IPUTILS=y
