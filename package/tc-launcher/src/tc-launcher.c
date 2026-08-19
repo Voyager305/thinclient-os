@@ -11,7 +11,9 @@
  *   ADD <name>;<ip>  добавить сервер в servers.conf
  *   SHELL            консоль Linux
  *   REBOOT           перезагрузка
- *   OFF              выключение
+ *   POWEROFF         выключение
+ *
+ * ВАЖНО: набор действий должен совпадать со списком case в tc-menu.
  */
 #include <curses.h>
 #include <ifaddrs.h>
@@ -218,7 +220,7 @@ static int do_add(void)
 
 static void bar_action(int bsel)
 {
-    static const char *act[NBAR] = { "SHELL", "REBOOT", "OFF" };
+    static const char *act[NBAR] = { "SHELL", "REBOOT", "POWEROFF" };
 
     endwin();
     write_choice(act[bsel], NULL, NULL);

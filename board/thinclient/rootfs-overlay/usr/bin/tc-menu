@@ -87,7 +87,7 @@ while true; do
         REBOOT)
             reboot
             ;;
-        OFF)
+        POWEROFF)
             poweroff
             ;;
         *)
