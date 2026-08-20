@@ -333,7 +333,6 @@ run_settings() {
             "RDP defaults${TAB}$(_rdp_summary)" \
             "Printer${TAB}$(_printer_summary)" \
             "#Система" \
-            "Hostname${TAB}$($GET HOSTNAME)" \
             "Diagnostics" \
             "Console"
         case "$UICHOICE" in
@@ -341,9 +340,8 @@ run_settings() {
             1) set_network ;;
             2) rdp_defaults_menu ;;
             3) printer_menu ;;
-            4) set_key HOSTNAME "Имя хоста" ;;
-            5) run_diag ;;
-            6) open_shell ;;
+            4) run_diag ;;
+            5) open_shell ;;
             *) return ;;      # BACK / пусто
         esac
     done
