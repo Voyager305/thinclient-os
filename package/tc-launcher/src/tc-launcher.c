@@ -497,7 +497,7 @@ static void draw_menu(int sel)
     }
 
     attrset(COLOR_PAIR(C_INFO));
-    mvaddstr(LINES - 1, 1, "Стрелки - выбор, Enter - ок, q - назад");
+    mvaddstr(LINES - 1, 1, "Up/Down select   Enter select   q back");
     refresh();
 }
 

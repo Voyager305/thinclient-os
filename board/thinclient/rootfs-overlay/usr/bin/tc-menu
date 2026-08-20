@@ -179,10 +179,10 @@ run_diag() {
         echo "-- Ping gateway $GW --"
         ping -c 2 -W 1 "$GW" 2>&1 | tail -2
     else
-        echo "(нет шлюза по умолчанию)"
+        echo "(no default gateway)"
     fi
     echo
-    echo "-- Последние ошибки RDP-сессии --"
+    echo "-- Last RDP session errors --"
     grep -iE 'error|denied|refused|timeout|unreachable|failed' \
         /var/log/xsession.log 2>/dev/null | tail -5
     echo
@@ -233,15 +233,17 @@ ui_menu() {
 
 _note() { clear; echo "$1"; sleep 2; }
 
-# короткие сводки для правой колонки главного экрана Settings
+# короткие сводки для правой колонки главного экрана Settings.
+# ВНИМАНИЕ: весь видимый в меню текст — только латиница: консольный шрифт на
+# tty1 не рисует кириллицу (получается мусор). Комментарии — можно по-русски.
 _rdp_summary() {
     _u=$($GET RDP_USER); _d=$($GET RDP_DOMAIN)
     [ -n "$_d" ] && _u="$_d\\$_u"
-    [ -n "$_u" ] && printf '%s' "$_u" || printf '\342\200\224'   # —
+    [ -n "$_u" ] && printf '%s' "$_u" || printf '%s' '-'
 }
 _printer_summary() {
     _p=$($GET PRINTER)
-    [ -n "$_p" ] && printf '%s' "$_p" || printf '\342\200\224'   # —
+    [ -n "$_p" ] && printf '%s' "$_p" || printf '%s' '-'
 }
 
 # Правка одного текстового ключа: Enter пустым — оставить; '-' — очистить.
@@ -249,41 +251,41 @@ set_key() {   # $1=KEY  $2=подпись
     cur=$($GET "$1")
     clear
     echo "=== $2 ==="
-    echo "Текущее: ${cur:-<пусто>}"
-    echo "Enter пустым — оставить как есть; '-' — очистить."
-    printf "Новое значение: "
+    echo "Current: ${cur:-<empty>}"
+    echo "Empty = keep as is;  '-' = clear."
+    printf "New value: "
     read -r v
     [ -z "$v" ] && return
     [ "$v" = "-" ] && v=""
     if ! $SET "$1" "$v"; then
-        echo "Не сохранено (носитель только для чтения?)"
+        echo "Not saved (read-only media?)"
         sleep 2
     fi
 }
 
 set_network() {
     if ! _flash_rw_ok; then
-        _note "Носитель только для чтения (ISO) — сеть в tc.conf не сохранить."
+        _note "Read-only media (ISO) - cannot save network settings to tc.conf."
         return
     fi
-    ui_menu "Сеть (сейчас: $(_net_mode))" \
-        "DHCP — получать адрес автоматически" \
-        "Статический IP"
+    ui_menu "Network (now: $(_net_mode))" \
+        "DHCP - obtain address automatically" \
+        "Static IP"
     case "$UICHOICE" in
         0)
             $SET STATIC_IP ""; $SET GATEWAY ""; $SET DNS ""
-            _note "Переключено на DHCP. Применится после ребута (или tc-netup)."
+            _note "Switched to DHCP. Applies after reboot (or tc-netup)."
             ;;
         1)
             clear
-            echo "=== Статический IP ==="
-            printf "IP/маска (напр. 192.168.0.50/24): "; read -r a
+            echo "=== Static IP ==="
+            printf "IP/mask (e.g. 192.168.0.50/24): "; read -r a
             [ -n "$a" ] && $SET STATIC_IP "$a"
-            printf "Шлюз (напр. 192.168.0.1): ";        read -r g
+            printf "Gateway (e.g. 192.168.0.1): ";     read -r g
             [ -n "$g" ] && $SET GATEWAY "$g"
-            printf "DNS (напр. 192.168.0.1): ";         read -r d
+            printf "DNS (e.g. 192.168.0.1): ";         read -r d
             [ -n "$d" ] && $SET DNS "$d"
-            _note "Сохранено. Применится после ребута (или tc-netup)."
+            _note "Saved. Applies after reboot (or tc-netup)."
             ;;
         *) ;;
     esac
@@ -292,14 +294,14 @@ set_network() {
 # Под-экран «RDP по умолчанию»: логин, домен, автоподключение.
 rdp_defaults_menu() {
     while true; do
-        ui_menu "RDP по умолчанию" \
-            "Логин${TAB}$($GET RDP_USER)" \
-            "Домен${TAB}$($GET RDP_DOMAIN)" \
-            "Автоподключение${TAB}$($GET AUTOCONNECT)"
+        ui_menu "RDP defaults" \
+            "Login${TAB}$($GET RDP_USER)" \
+            "Domain${TAB}$($GET RDP_DOMAIN)" \
+            "Autoconnect${TAB}$($GET AUTOCONNECT)"
         case "$UICHOICE" in
-            0) set_key RDP_USER    "RDP логин по умолчанию" ;;
-            1) set_key RDP_DOMAIN  "RDP домен по умолчанию" ;;
-            2) set_key AUTOCONNECT "Автоподключение (IP или список через запятую)" ;;
+            0) set_key RDP_USER    "Default RDP login" ;;
+            1) set_key RDP_DOMAIN  "Default RDP domain" ;;
+            2) set_key AUTOCONNECT "Autoconnect (IP or comma-separated list)" ;;
             *) return ;;
         esac
     done
@@ -308,12 +310,12 @@ rdp_defaults_menu() {
 # Под-экран «Принтер»: сетевой принтер, пробрасываемый в RDP-сессию.
 printer_menu() {
     while true; do
-        ui_menu "Принтер (проброс в RDP)" \
-            "URI принтера${TAB}$($GET PRINTER)" \
-            "Имя очереди${TAB}$($GET PRINTER_NAME)"
+        ui_menu "Printer (RDP redirect)" \
+            "Printer URI${TAB}$($GET PRINTER)" \
+            "Queue name${TAB}$($GET PRINTER_NAME)"
         case "$UICHOICE" in
-            0) set_key PRINTER      "URI сетевого принтера (socket://ip:9100, lpd://ip/queue, ipp://host/...)" ;;
-            1) set_key PRINTER_NAME "Имя очереди принтера (как увидит Windows; по умолчанию printer)" ;;
+            0) set_key PRINTER      "Network printer URI (socket://ip:9100, lpd://ip/queue, ipp://host/...)" ;;
+            1) set_key PRINTER_NAME "Printer queue name (as Windows sees it; default: printer)" ;;
             *) return ;;
         esac
     done
@@ -326,13 +328,13 @@ run_settings() {
     check_pass || return
     while true; do
         ui_menu "Settings" \
-            "#Серверы" \
-            "Manage servers${TAB}добавить / изменить / удалить" \
-            "#Сеть и RDP" \
+            "#Servers" \
+            "Manage servers${TAB}add / edit / delete" \
+            "#Network & RDP" \
             "Network${TAB}$(_net_mode)" \
             "RDP defaults${TAB}$(_rdp_summary)" \
             "Printer${TAB}$(_printer_summary)" \
-            "#Система" \
+            "#System" \
             "Diagnostics" \
             "Console"
         case "$UICHOICE" in
