@@ -1,40 +1,75 @@
 #!/bin/sh
-# SSH (dropbear) — запускаем ПОСЛЕ S50flash/S51network, с host-key на флешке,
-# чтобы ключ переживал перезагрузку (иначе клиент ругается «host key changed»
-# на каждый коннект — привыкаешь жать yes, и настоящий MITM неотличим).
-# Скелетный S50dropbear убран в post-build.sh.
-KD=/mnt/flash/dropbear
+# SSH (dropbear) — стартует ПОСЛЕ S50flash/S51network.
+#
+# Host-key: сначала пробуем ПЕРСИСТЕНТНЫЙ ключ на флешке (переживает ребут —
+# нет «host key changed» на каждый коннект). Если носитель read-only (ISO/CD,
+# напр. в UTM) — эфемерный ключ в RAM (/run/dropbear).
+#
+# Ключи ВСЕГДА передаём явным -r и в существующий каталог. Bare `dropbear -R`
+# писал бы в /etc/dropbear -> /var/run/dropbear, которого при загрузке нет
+# (мы убрали скелетный S50dropbear, а он это создавал) — тогда sshd молча
+# рвёт соединения: «Connection closed ... port 22». Именно это и ловили на
+# read-only носителе.
+FKD=/mnt/flash/dropbear     # persistent (флешка)
+RKD=/run/dropbear           # ephemeral (RAM) — fallback для ro-носителя
 DB=/usr/sbin/dropbear
 KG=/usr/bin/dropbearkey
 
+# Валидная генерация host-key:
+#  - существующий ключ проверяем `dropbearkey -y`; битый (обрыв питания при
+#    первой генерации) перегенерим — иначе sshd рвёт коннекты;
+#  - пишем во временный файл и mv — атомарно, без «полу-ключа».
+gen_key() {   # $1=rsa|ecdsa  $2=путь
+    if [ -s "$2" ] && "$KG" -y -f "$2" >/dev/null 2>&1; then
+        return 0                      # ключ есть и валиден
+    fi
+    rm -f "$2" "$2.tmp"
+    if "$KG" -t "$1" -f "$2.tmp" >/dev/null 2>&1; then
+        mv "$2.tmp" "$2"
+    else
+        rm -f "$2.tmp"
+    fi
+}
+
+start() {
+    KD=""
+    # 1) персистентные ключи на флешке (если она пишется)
+    if mount -o remount,rw /mnt/flash 2>/dev/null; then
+        mkdir -p "$FKD"
+        gen_key rsa   "$FKD/rsa"
+        gen_key ecdsa "$FKD/ecdsa"
+        sync
+        mount -o remount,ro /mnt/flash 2>/dev/null
+        [ -s "$FKD/rsa" ] && [ -s "$FKD/ecdsa" ] && KD="$FKD"
+    fi
+    # 2) ro-носитель или ключи не легли — эфемерные ключи в RAM
+    if [ -z "$KD" ]; then
+        mkdir -p "$RKD"
+        gen_key rsa   "$RKD/rsa"
+        gen_key ecdsa "$RKD/ecdsa"
+        [ -s "$RKD/rsa" ] && [ -s "$RKD/ecdsa" ] && KD="$RKD"
+    fi
+
+    # опц. вход по ключу: authorized_keys с флешки
+    if [ -f /mnt/flash/authorized_keys ]; then
+        mkdir -p /root/.ssh
+        cp /mnt/flash/authorized_keys /root/.ssh/authorized_keys
+        chmod 700 /root/.ssh
+        chmod 600 /root/.ssh/authorized_keys
+    fi
+
+    printf "Starting dropbear sshd: "
+    if [ -n "$KD" ]; then
+        "$DB" -r "$KD/rsa" -r "$KD/ecdsa"      # stderr НЕ глушим — видно ошибку
+        [ $? = 0 ] && echo "OK ($KD)" || echo "FAIL"
+    else
+        echo "FAIL (no host keys)"
+    fi
+}
+
 case "$1" in
-    start)
-        # host-key на флешке (генерим при первой загрузке; носитель ro → пропуск)
-        if mount -o remount,rw /mnt/flash 2>/dev/null; then
-            mkdir -p "$KD"
-            [ -f "$KD/rsa" ]   || "$KG" -t rsa   -f "$KD/rsa"   >/dev/null 2>&1
-            [ -f "$KD/ecdsa" ] || "$KG" -t ecdsa -f "$KD/ecdsa" >/dev/null 2>&1
-            sync
-            mount -o remount,ro /mnt/flash 2>/dev/null
-        fi
-
-        # опц. вход по ключу: authorized_keys с флешки
-        if [ -f /mnt/flash/authorized_keys ]; then
-            mkdir -p /root/.ssh
-            cp /mnt/flash/authorized_keys /root/.ssh/authorized_keys
-            chmod 700 /root/.ssh
-            chmod 600 /root/.ssh/authorized_keys
-        fi
-
-        printf "Starting dropbear sshd: "
-        if [ -f "$KD/rsa" ] && [ -f "$KD/ecdsa" ]; then
-            "$DB" -r "$KD/rsa" -r "$KD/ecdsa" 2>/dev/null   # персистентные ключи
-        else
-            "$DB" -R 2>/dev/null                             # ro-носитель → ключ в RAM
-        fi
-        [ $? = 0 ] && echo "OK" || echo "FAIL"
-        ;;
-    stop)
-        killall dropbear 2>/dev/null
-        ;;
+    start)   start ;;
+    stop)    killall dropbear 2>/dev/null ;;
+    restart) killall dropbear 2>/dev/null; start ;;
+    *)       echo "usage: $0 {start|stop|restart}" >&2; exit 1 ;;
 esac
