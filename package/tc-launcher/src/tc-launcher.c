@@ -121,7 +121,9 @@ static void write_choice(const char *fmt, const char *arg1, const char *arg2)
  * всегда; пароль на неё (опционально) ставит админ файлом shell.pass —
  * проверку делает tc-menu. */
 #define NBAR 5
-static const char *bar_label[NBAR] = { " Console ", " Diag ", " Settings ", " Reboot ", " PowerOff " };
+static const char *bar_label[NBAR] = {
+    " Console ", " Diagnostics ", " Settings ", " Reboot ", " PowerOff "
+};
 static int nbar = NBAR;   /* 0 в режиме управления серверами */
 static int manage = 0;    /* 1 = экран «Manage servers» (add/edit/delete) */
 
@@ -211,9 +213,6 @@ static void draw(int sel)
         mvaddstr(0, (COLS - 14) / 2, "Manage servers");
         attrset(COLOR_PAIR(C_INFO));
         mvaddstr(LINES - 1, 1, "Enter/e edit   d delete   a add   q back");
-    } else if (nsrv && sel < nsrv) {
-        attrset(COLOR_PAIR(C_INFO));
-        mvaddstr(LINES - 1, 1, "Enter connect");
     }
 
     draw_buttons(sel, x0);
@@ -439,7 +438,7 @@ int main(int argc, char **argv)
             }
             break;
         /* F-клавиши: сервис (только main):
-         * Console/Diag/Settings/Reboot/PowerOff */
+         * Console/Diagnostics/Settings/Reboot/PowerOff */
         case KEY_F(3):
             if (!manage) { bar_action(0); return 0; }
             break;

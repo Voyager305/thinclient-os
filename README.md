@@ -18,7 +18,7 @@ ncurses-лаунчер · Xorg (поднимается только на вре�
   современных десктопов — нативная графика на Intel/NVIDIA/старых AMD,
   VESA-fallback на остальном, широкая поддержка сетевых карт.
 - **Интерфейс**: тёмный ncurses-лаунчер — список серверов по центру,
-  сервисные кнопки (Console / Diag / Settings / Reboot / PowerOff) столбиком
+  сервисные кнопки (Console / Diagnostics / Settings / Reboot / PowerOff) столбиком
   внизу, hostname и IP в углу. Управление стрелками и Enter; добавление и
   правка сервера из меню, настройки сети/RDP — из экрана Settings.
 - **RDP**: FreeRDP 2.11 — Windows Server 2008 R2 … 2022 (RDP 7–10, NLA,
@@ -60,10 +60,10 @@ ncurses-лаунчер · Xorg (поднимается только на вре�
 ## Использование
 
 - **Меню**: стрелки вверх/вниз ходят по кругу «серверы → Manage servers →
-  Console → Diag → Settings → Reboot → PowerOff», Enter выполняет. Enter на
+  Console → Diagnostics → Settings → Reboot → PowerOff», Enter выполняет. Enter на
   сервере — сразу подключение. Сервис-кнопки продублированы F-клавишами
-  (F3 Console, F4 Diag, F5 Settings, F6 Reboot, F7 PowerOff).
-- **Diag**: экран диагностики без ухода в шелл — интерфейсы/IP, маршруты,
+  (F3 Console, F4 Diagnostics, F5 Settings, F6 Reboot, F7 PowerOff).
+- **Diagnostics**: экран диагностики без ухода в шелл — интерфейсы/IP, маршруты,
   DNS, ping до шлюза, последние ошибки RDP-сессии.
 - **Settings**: правка `tc.conf` прямо из меню, без консоли и текстового
   редактора — сеть (переключить DHCP ↔ статический IP/шлюз/DNS), RDP-логин и
@@ -237,7 +237,7 @@ board/thinclient/
     etc/init.d/S98splashdone       гасит заставку перед меню
     etc/profile.d/tc-prompt.sh     промпт user@host:cwd
     root/.bash_profile, .bashrc, .vimrc   окружение root-консоли
-    usr/bin/tc-menu                обёртка: выбор лаунчера, Console/Diag/Settings
+    usr/bin/tc-menu                обёртка: выбор лаунчера, Console/Diagnostics/Settings
     usr/bin/tc-edit                правка файлов на флешке (rw→edit→ro)
     usr/bin/tc-getconf             безопасное чтение ключа tc.conf (без eval)
     usr/bin/tc-setconf             безопасная запись ключа tc.conf (экран Settings)
