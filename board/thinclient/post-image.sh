@@ -46,7 +46,8 @@ gen_seed() {
         : > "$SEED/tc.conf"
         # HOSTNAME намеренно не запекаем — имя хоста присваивается само (tc-<mac>)
         for k in STATIC_IP GATEWAY DNS NTP_SERVER KEYMAP WAIT_FOR_IP \
-                 RDP_USER RDP_DOMAIN RDP_EXTRA AUTOCONNECT PRINTER PRINTER_NAME; do
+                 RDP_USER RDP_DOMAIN RDP_SECURITY RDP_EXTRA AUTOCONNECT \
+                 PRINTER PRINTER_NAME; do
             eval "v=\${$k:-}"
             [ -n "$v" ] && printf '%s=%s\r\n' "$k" "$v" >> "$SEED/tc.conf"
         done

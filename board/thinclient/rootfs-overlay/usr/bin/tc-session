@@ -13,11 +13,17 @@
 SRV="$1"
 RDP_USER=$(/usr/bin/tc-getconf RDP_USER)
 RDP_DOMAIN=$(/usr/bin/tc-getconf RDP_DOMAIN)
+RDP_SEC=$(/usr/bin/tc-getconf RDP_SECURITY)
 RDP_EXTRA=$(/usr/bin/tc-getconf RDP_EXTRA)
 
 set -- /f /v:"$SRV" /cert:ignore /bpp:16 +clipboard /dynamic-resolution /printer
 [ -n "$RDP_USER" ]   && set -- "$@" /u:"$RDP_USER"
 [ -n "$RDP_DOMAIN" ] && set -- "$@" /d:"$RDP_DOMAIN"
+# Протокол безопасности: rdp = обычный RDP (без NLA/TLS — как `-sec-nla -sec-tls`),
+# tls/nla = только TLS/NLA. Пусто = авто-согласование (по умолчанию).
+case "$RDP_SEC" in
+    rdp|tls|nla|ext) set -- "$@" /sec:"$RDP_SEC" ;;
+esac
 
 # RDP_EXTRA намеренно без кавычек — это набор доп. флагов из tc.conf
 xfreerdp "$@" $RDP_EXTRA

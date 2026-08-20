@@ -173,6 +173,7 @@ nano site.env                   # правишь ТОЛЬКО этот файл
 | `STATIC_IP`, `GATEWAY`, `DNS`, `NTP_SERVER`, `KEYMAP` | сеть/время/раскладка | `tc.conf` на флешке |
 | `WAIT_FOR_IP` | ждать IP (секунды) перед показом меню; клавиша — скип | `tc.conf` на флешке |
 | `RDP_USER`, `RDP_DOMAIN`, `RDP_EXTRA`, `AUTOCONNECT` | RDP-дефолты, автоконнект | `tc.conf` на флешке |
+| `RDP_SECURITY` | протокол RDP: `auto`/`rdp`/`tls`/`nla` (`rdp` = без NLA/TLS) | `tc.conf` на флешке |
 | `PRINTER`, `PRINTER_NAME` | сетевой принтер | `tc.conf` на флешке |
 | `SERVERS` | список серверов (`Имя=адрес`) | `servers.conf` на флешке |
 
