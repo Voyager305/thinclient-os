@@ -38,6 +38,54 @@ read_password() {
     printf '\n'
 }
 
+# есть ли глобальный IPv4 (не lo, не link-local)
+_has_ip() {
+    ip -4 -o addr show scope global 2>/dev/null | grep -q .
+}
+
+# заблокировать до нажатия любой клавиши
+_anykey() {
+    _sv=$(stty -g 2>/dev/null)
+    stty -echo -icanon min 1 time 0 2>/dev/null
+    dd bs=1 count=1 >/dev/null 2>&1
+    if [ -n "$_sv" ]; then stty "$_sv" 2>/dev/null; else stty sane 2>/dev/null; fi
+}
+
+# Ждать IP перед показом меню, если задан tc.conf WAIT_FOR_IP=<секунды>.
+# Любая клавиша — пропустить сразу. По таймауту без IP — экран «обратитесь к
+# администратору», потом любая клавиша -> меню. Никогда не запирает насмерть.
+wait_for_ip() {
+    secs=$(/usr/bin/tc-getconf WAIT_FOR_IP)
+    case "$secs" in ''|0|*[!0-9]*) return 0 ;; esac   # не задано/не число -> не ждём
+    _has_ip && return 0
+    /usr/bin/tc-netup 2>/dev/null                     # убедиться, что udhcpc поднят (он ретраит сам)
+    _sv=$(stty -g 2>/dev/null)
+    stty -echo -icanon min 0 time 10 2>/dev/null      # dd ждёт клавишу до ~1с
+    left=$secs
+    while [ "$left" -gt 0 ]; do
+        clear
+        echo "Waiting for network (IP address)... ${left}s"
+        echo
+        echo "(press any key to skip)"
+        key=$(dd bs=1 count=1 2>/dev/null)            # клавиша ИЛИ ~1с таймаут
+        if [ -n "$key" ] || _has_ip; then
+            if [ -n "$_sv" ]; then stty "$_sv" 2>/dev/null; else stty sane 2>/dev/null; fi
+            return 0
+        fi
+        left=$((left - 1))
+    done
+    if [ -n "$_sv" ]; then stty "$_sv" 2>/dev/null; else stty sane 2>/dev/null; fi
+    clear
+    echo "=== No network connection ==="
+    echo
+    echo "The thin client did not get an IP address."
+    echo "Please contact your administrator."
+    echo
+    printf "Press any key to continue..."
+    _anykey
+    printf '\n'
+}
+
 save_server() {
     # формат не должен ломаться, что бы ни пришло: точки с запятой и
     # переводы строк из полей выкидываем
@@ -441,7 +489,13 @@ manage_loop() {
 
 while true; do
     # сеть могла появиться позже загрузки — лаунчер покажет ip, как только он есть
-    ip -4 -o addr show scope global 2>/dev/null | grep -q . || /usr/bin/tc-netup 2>/dev/null
+    _has_ip || /usr/bin/tc-netup 2>/dev/null
+
+    # ждать IP перед первым показом меню (tc.conf WAIT_FOR_IP), один раз за загрузку
+    if [ ! -f /tmp/tc-ipwait-done ]; then
+        : > /tmp/tc-ipwait-done
+        wait_for_ip
+    fi
 
     # киоск: автоподключение ОДИН раз за загрузку (tc.conf AUTOCONNECT).
     # Флаг ставим до connect — если сервер недоступен, показываем меню,
