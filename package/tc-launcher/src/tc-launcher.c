@@ -6,18 +6,18 @@
  * в /tmp/tc-choice и завершается, а обёртка tc-menu выполняет его
  * и перезапускает лаунчер.
  *
- * Протокол в /tmp/tc-choice (одна строка):
+ * Протокол в /tmp/tc-choice (одна строка).
+ * Главный экран (для пользователя):
  *   CONNECT <ip>            подключиться к серверу
- *   MANAGE                  экран управления серверами (add/edit/delete)
+ *   SETTINGS               админ-раздел (сеть/RDP/принтер/диагностика/консоль
+ *                          /управление серверами) — всё исполняет tc-menu
+ *   REBOOT                  перезагрузка
+ *   POWEROFF                выключение
+ * Режим управления серверами (--manage, вызывается из Settings через tc-menu):
  *   ADD <name>;<ip>         добавить сервер в servers.conf
  *   EDIT <old>\t<new>       заменить запись сервера
  *   DELETE <name>;<ip>      удалить сервер
  *   BACK                    выйти из экрана управления
- *   SHELL                   консоль Linux
- *   DIAG                    экран диагностики (сеть/ping/логи)
- *   SETTINGS                экран настроек (сеть, RDP-дефолты) в tc.conf
- *   REBOOT                  перезагрузка
- *   POWEROFF                выключение
  *
  * ВАЖНО: набор действий должен совпадать со списком case в tc-menu.
  */
@@ -117,15 +117,18 @@ static void write_choice(const char *fmt, const char *arg1, const char *arg2)
     fclose(f);
 }
 
-/* сервисные кнопки — вертикальным столбиком внизу. Console показывается
- * всегда; пароль на неё (опционально) ставит админ файлом shell.pass —
- * проверку делает tc-menu. */
-#define NBAR 5
-static const char *bar_label[NBAR] = {
-    " Console ", " Diagnostics ", " Settings ", " Reboot ", " PowerOff "
-};
+/* сервисные кнопки — вертикальным столбиком внизу. Главный экран — только
+ * для пользователя: выбрать сервер и подключиться. Всё админское (управление
+ * серверами, сеть/RDP, диагностика, консоль) — под пунктом Settings, который
+ * tc-menu опционально паролит файлом shell.pass. */
+#define NBAR 3
+static const char *bar_label[NBAR] = { " Settings ", " Reboot ", " PowerOff " };
 static int nbar = NBAR;   /* 0 в режиме управления серверами */
 static int manage = 0;    /* 1 = экран «Manage servers» (add/edit/delete) */
+
+/* В обычном меню кнопки идут сразу после серверов. В режиме управления есть
+ * дополнительный слот "+ Add server" (индекс nsrv), кнопок нет. */
+static int addslot(void) { return manage ? 1 : 0; }
 
 static void draw_buttons(int sel, int x0)
 {
@@ -133,7 +136,7 @@ static void draw_buttons(int sel, int x0)
     int i;
 
     for (i = 0; i < nbar; i++) {
-        if (sel == nsrv + 1 + i)
+        if (sel == nsrv + addslot() + i)
             attrset(COLOR_PAIR(C_SEL));
         else
             attrset(COLOR_PAIR(C_IP));
@@ -143,16 +146,18 @@ static void draw_buttons(int sel, int x0)
 }
 
 /*
- * Единая цепочка выбора: 0..nsrv-1 — серверы, nsrv — "+ Add server",
- * nsrv+1..nsrv+NBAR — кнопки нижней полосы. Стрелки вверх/вниз ходят
- * по всей цепочке по кругу.
+ * Цепочка выбора: 0..nsrv-1 — серверы; дальше в обычном меню сразу кнопки
+ * нижней полосы (Settings/Reboot/PowerOff), а в режиме управления — слот
+ * "+ Add server" (индекс nsrv). Стрелки вверх/вниз ходят по кругу.
  */
 static void draw(int sel)
 {
     char info[160];
     int gap = nsrv ? 1 : 0;
-    int height = nsrv + gap + 1;
-    int top = (LINES - 1 - height) / 2;
+    /* в обычном меню высота блока = список серверов (кнопки прибиты к низу);
+     * в режиме управления добавляется слот "+ Add server" */
+    int height = manage ? nsrv + gap + 1 : nsrv;
+    int top = (LINES - 1 - (height ? height : 1)) / 2;
     int x0 = (COLS - LIST_W) / 2;
     int i, y;
 
@@ -202,13 +207,14 @@ static void draw(int sel)
                  servers[i].ip);
     }
 
-    y = top + nsrv + gap;
-    attrset(sel == nsrv ? COLOR_PAIR(C_SEL) : COLOR_PAIR(C_INFO));
-    if (sel == nsrv)
-        mvhline(y, x0, ' ', LIST_W);
-    mvaddstr(y, x0 + 1, manage ? "+ Add server" : "Manage servers");
-
+    /* слот "+ Add server" — только в режиме управления серверами */
     if (manage) {
+        y = top + nsrv + gap;
+        attrset(sel == nsrv ? COLOR_PAIR(C_SEL) : COLOR_PAIR(C_INFO));
+        if (sel == nsrv)
+            mvhline(y, x0, ' ', LIST_W);
+        mvaddstr(y, x0 + 1, "+ Add server");
+
         attrset(COLOR_PAIR(C_HOST));
         mvaddstr(0, (COLS - 14) / 2, "Manage servers");
         attrset(COLOR_PAIR(C_INFO));
@@ -333,7 +339,7 @@ static int do_delete(int i)
 
 static void bar_action(int bsel)
 {
-    static const char *act[NBAR] = { "SHELL", "DIAG", "SETTINGS", "REBOOT", "POWEROFF" };
+    static const char *act[NBAR] = { "SETTINGS", "REBOOT", "POWEROFF" };
 
     endwin();
     write_choice(act[bsel], NULL, NULL);
@@ -350,7 +356,8 @@ int main(int argc, char **argv)
     }
 
     load_servers();
-    total = nsrv + 1 + nbar;    /* серверы + Add/Manage (+ кнопки в main) */
+    /* main: серверы + кнопки; manage: серверы + слот "+ Add server" */
+    total = nsrv + addslot() + nbar;
 
     initscr();
     start_color();
@@ -398,18 +405,12 @@ int main(int argc, char **argv)
                 write_choice("CONNECT %s", servers[sel].ip, NULL);
                 return 0;
             }
-            if (sel == nsrv) {
-                if (manage) {
-                    if (do_add())
-                        return 0;
-                } else {
-                    endwin();
-                    write_choice("MANAGE", NULL, NULL);
+            if (manage) {                 /* sel == nsrv: слот "+ Add server" */
+                if (do_add())
                     return 0;
-                }
                 break;
             }
-            bar_action(sel - nsrv - 1);   /* сервис-кнопки (только main) */
+            bar_action(sel - nsrv);       /* сервис-кнопки (только main) */
             return 0;
         /* --- клавиши режима управления серверами --- */
         case 'e':
@@ -437,22 +438,15 @@ int main(int argc, char **argv)
                 return 0;
             }
             break;
-        /* F-клавиши: сервис (только main):
-         * Console/Diagnostics/Settings/Reboot/PowerOff */
-        case KEY_F(3):
+        /* F-клавиши: сервис (только main): Settings/Reboot/PowerOff */
+        case KEY_F(5):
             if (!manage) { bar_action(0); return 0; }
             break;
-        case KEY_F(4):
+        case KEY_F(6):
             if (!manage) { bar_action(1); return 0; }
             break;
-        case KEY_F(5):
-            if (!manage) { bar_action(2); return 0; }
-            break;
-        case KEY_F(6):
-            if (!manage) { bar_action(3); return 0; }
-            break;
         case KEY_F(7):
-            if (!manage) { bar_action(4); return 0; }
+            if (!manage) { bar_action(2); return 0; }
             break;
         default:
             break;

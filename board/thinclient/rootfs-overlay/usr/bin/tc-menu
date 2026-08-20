@@ -60,8 +60,10 @@ _rewrite_conf() {
 delete_server() { _rewrite_conf "$1" ""; }      # $1 = "name;ip"
 edit_server()   { _rewrite_conf "$1" "$2"; }     # $1 = старое, $2 = новое
 
-# Консоль по умолчанию БЕЗ пароля. Админ может её запаролить: положить на
-# флешку shell.pass с sha256-хэшем пароля — тогда консоль спросит его.
+# Раздел Settings (управление серверами, сеть/RDP, принтер, диагностика,
+# консоль) по умолчанию БЕЗ пароля. Админ может запаролить весь вход в него:
+# положить на флешку shell.pass с sha256-хэшем пароля — тогда Settings спросит
+# его (и консоль внутри тоже закрыта). Забыл пароль — удали файл.
 # Создать: printf '%s' 'пароль' | sha256sum | cut -c1-64 > /mnt/flash/shell.pass
 check_pass() {
     [ -f "$PASS_FILE" ] || return 0
@@ -81,7 +83,8 @@ check_pass() {
 }
 
 open_shell() {
-    check_pass || return
+    # Пароль спрашивается на входе в весь раздел Settings (run_settings),
+    # отдельного гейта на консоль уже не нужно.
     clear
     echo "=== Linux console (root). Back to menu: exit or Ctrl-D ==="
     echo "Flash is mounted read-only. To edit files on it use:"
@@ -187,15 +190,23 @@ run_diag() {
     read -r _
 }
 
-# Экран настроек: правка ключей tc.conf прямо из меню (сеть, RDP-дефолты,
-# имя хоста, автоподключение). Пишем безопасным tc-setconf (ремоунт rw/ro,
-# без eval). На ISO (только чтение) — честный отказ на входе.
+# Раздел Settings — единый админ-экран из меню. Сверху правка tc.conf (сеть,
+# RDP-дефолты, принтер, имя хоста) безопасным tc-setconf (ремоунт rw/ro, без
+# eval), снизу — управление серверами, диагностика и консоль. Вход опционально
+# паролится (check_pass / shell.pass на флешке).
 SET=/usr/bin/tc-setconf
 GET=/usr/bin/tc-getconf
 
 _net_mode() {
     ip=$($GET STATIC_IP)
     if [ -n "$ip" ]; then echo "static $ip"; else echo "DHCP"; fi
+}
+
+# true, если на флешку можно писать (не ISO): тестовый ремоунт rw→ro.
+_flash_rw_ok() {
+    mount -o remount,rw /mnt/flash 2>/dev/null || return 1
+    mount -o remount,ro /mnt/flash 2>/dev/null
+    return 0
 }
 
 # Правка одного текстового ключа: Enter пустым — оставить; '-' — очистить.
@@ -216,6 +227,13 @@ set_key() {   # $1=KEY  $2=подпись
 }
 
 set_network() {
+    if ! _flash_rw_ok; then
+        clear
+        echo "Носитель только для чтения (ISO) — сеть в tc.conf не сохранить."
+        printf "Enter — назад..."
+        read -r _
+        return
+    fi
     clear
     echo "=== Сеть ==="
     echo "Сейчас: $(_net_mode)"
@@ -245,43 +263,95 @@ set_network() {
     esac
 }
 
-run_settings() {
-    # Флешка ro (ISO) — настройки хранить негде, честно говорим об этом сразу,
-    # чтобы админ не тыкал в мёртвое меню.
-    if ! mount -o remount,rw /mnt/flash 2>/dev/null; then
-        clear
-        echo "=== Настройки ==="
-        echo "Флешка только для чтения (ISO-образ) — сохранять tc.conf некуда."
-        echo "Нужен usb.img или флешка с разделом TCDATA."
-        printf "Enter — назад..."
-        read -r _
-        return
-    fi
-    mount -o remount,ro /mnt/flash 2>/dev/null   # запись делает сам tc-setconf
+# Под-экран «RDP по умолчанию»: логин, домен, автоподключение.
+rdp_defaults_menu() {
     while true; do
         clear
-        echo "=== Настройки (tc.conf на флешке) ==="
-        echo "Имя хоста:    $($GET HOSTNAME)"
-        echo "Сеть:         $(_net_mode)"
-        echo "RDP логин:    $($GET RDP_USER)"
-        echo "RDP домен:    $($GET RDP_DOMAIN)"
+        echo "=== RDP по умолчанию ==="
+        echo "Логин:        $($GET RDP_USER)"
+        echo "Домен:        $($GET RDP_DOMAIN)"
         echo "Автоконнект:  $($GET AUTOCONNECT)"
         echo
-        echo " 1) Сеть (DHCP / статический IP)"
-        echo " 2) RDP логин по умолчанию"
-        echo " 3) RDP домен по умолчанию"
-        echo " 4) Имя хоста"
-        echo " 5) Автоподключение (IP или список через запятую)"
-        echo " q) Назад в меню"
+        echo " 1) Логин"
+        echo " 2) Домен"
+        echo " 3) Автоподключение (IP или список через запятую — failover)"
+        echo " q) Назад"
         echo
         printf "> "
         read -r c
         case "$c" in
-            1) set_network ;;
-            2) set_key RDP_USER   "RDP логин по умолчанию" ;;
-            3) set_key RDP_DOMAIN "RDP домен по умолчанию" ;;
-            4) set_key HOSTNAME   "Имя хоста" ;;
-            5) set_key AUTOCONNECT "Автоподключение (IP или список через запятую)" ;;
+            1) set_key RDP_USER    "RDP логин по умолчанию" ;;
+            2) set_key RDP_DOMAIN  "RDP домен по умолчанию" ;;
+            3) set_key AUTOCONNECT "Автоподключение (IP или список через запятую)" ;;
+            q|Q|"") return ;;
+            *) ;;
+        esac
+    done
+}
+
+# Под-экран «Принтер»: сетевой принтер, пробрасываемый в RDP-сессию.
+printer_menu() {
+    while true; do
+        clear
+        echo "=== Принтер (проброс в RDP-сессию) ==="
+        echo "URI:   $($GET PRINTER)"
+        echo "Имя:   $($GET PRINTER_NAME)"
+        echo
+        echo "Сетевой принтер. Примеры URI:"
+        echo "  socket://192.168.0.20:9100   JetDirect/AppSocket (частый)"
+        echo "  lpd://192.168.0.20/queue     LPD"
+        echo "  ipp://host/ipp/print         IPP (ipps:// — с TLS)"
+        echo
+        echo " 1) URI принтера"
+        echo " 2) Имя очереди (как увидит Windows)"
+        echo " q) Назад"
+        echo
+        printf "> "
+        read -r c
+        case "$c" in
+            1) set_key PRINTER      "URI сетевого принтера (напр. socket://192.168.0.20:9100)" ;;
+            2) set_key PRINTER_NAME "Имя очереди принтера (по умолчанию printer)" ;;
+            q|Q|"") return ;;
+            *) ;;
+        esac
+    done
+}
+
+# Единый админ-экран Settings. Вход опционально паролится (shell.pass).
+# Диагностика и консоль работают и на read-only носителе; правка tc.conf/
+# серверов на ISO честно упрётся в «только чтение» на своём шаге.
+run_settings() {
+    check_pass || return
+    while true; do
+        clear
+        echo "=== Settings ==="
+        echo "Хост: $($GET HOSTNAME)    Сеть: $(_net_mode)"
+        echo
+        echo "-- Серверы --"
+        echo "  1) Manage servers     добавить / изменить / удалить"
+        echo
+        echo "-- Сеть и RDP --"
+        echo "  2) Network            DHCP / статический IP"
+        echo "  3) RDP defaults       логин / домен / автоконнект"
+        echo "  4) Printer            сетевой принтер"
+        echo
+        echo "-- Система --"
+        echo "  5) Hostname           имя хоста"
+        echo "  6) Diagnostics        интерфейсы / ping / логи"
+        echo "  7) Console            root-консоль (bash)"
+        echo
+        echo "  q) Назад в меню"
+        echo
+        printf "> "
+        read -r c
+        case "$c" in
+            1) manage_loop ;;
+            2) set_network ;;
+            3) rdp_defaults_menu ;;
+            4) printer_menu ;;
+            5) set_key HOSTNAME "Имя хоста" ;;
+            6) run_diag ;;
+            7) open_shell ;;
             q|Q|"") return ;;
             *) ;;
         esac
@@ -340,21 +410,14 @@ while true; do
     /usr/bin/tc-launcher
     action=$(cat "$OUT" 2>/dev/null)
 
+    # Главный экран отдаёт только эти действия. Управление серверами,
+    # диагностика и консоль теперь внутри Settings (run_settings).
     case "$action" in
         CONNECT\ *)
             connect "${action#CONNECT }"
             ;;
-        MANAGE)
-            manage_loop
-            ;;
-        DIAG)
-            run_diag
-            ;;
         SETTINGS)
             run_settings
-            ;;
-        SHELL)
-            open_shell
             ;;
         REBOOT)
             reboot
