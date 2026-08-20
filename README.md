@@ -170,7 +170,7 @@ nano site.env                   # правишь ТОЛЬКО этот файл
 | `ROOT_PASSWORD` | пароль root | `/etc/shadow` |
 | `USER_NAME`, `USER_PASSWORD` | юзер для SSH (+ sudo) | `/etc/shadow` |
 | `SETTINGS_PASSWORD` | пароль на раздел Settings | `shell.pass` на флешке |
-| `HOSTNAME`, `STATIC_IP`, `GATEWAY`, `DNS`, `NTP_SERVER`, `KEYMAP` | сеть/время/раскладка | `tc.conf` на флешке |
+| `STATIC_IP`, `GATEWAY`, `DNS`, `NTP_SERVER`, `KEYMAP` | сеть/время/раскладка | `tc.conf` на флешке |
 | `RDP_USER`, `RDP_DOMAIN`, `RDP_EXTRA`, `AUTOCONNECT` | RDP-дефолты, автоконнект | `tc.conf` на флешке |
 | `PRINTER`, `PRINTER_NAME` | сетевой принтер | `tc.conf` на флешке |
 | `SERVERS` | список серверов (`Имя=адрес`) | `servers.conf` на флешке |

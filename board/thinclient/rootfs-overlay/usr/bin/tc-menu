@@ -7,7 +7,36 @@ CONF=/mnt/flash/servers.conf
 PASS_FILE=/mnt/flash/shell.pass
 OUT=/tmp/tc-choice
 TAB=$(printf '\t')
+CR=$(printf '\r')       # Enter на консоли шлёт CR
+BS=$(printf '\b')       # Backspace
+DEL=$(printf '\177')    # DEL (тоже забой на многих терминалах)
 export TERM=linux
+
+# Ввод пароля с эхом '*' (результат в PW). Читаем побайтно через stty+dd —
+# портативно (busybox read -s/-n1 может отсутствовать). Backspace стирает.
+read_password() {
+    PW=""
+    _sv=$(stty -g 2>/dev/null)
+    stty -echo -icanon min 1 time 0 2>/dev/null
+    while true; do
+        c=$(dd bs=1 count=1 2>/dev/null)
+        case "$c" in
+            ""|"$CR") break ;;                 # Enter (LF -> пусто в $(), либо CR)
+            "$BS"|"$DEL")
+                if [ -n "$PW" ]; then
+                    PW=${PW%?}
+                    printf '\b \b'
+                fi
+                ;;
+            *)
+                PW="$PW$c"
+                printf '*'
+                ;;
+        esac
+    done
+    if [ -n "$_sv" ]; then stty "$_sv" 2>/dev/null; else stty sane 2>/dev/null; fi
+    printf '\n'
+}
 
 save_server() {
     # формат не должен ломаться, что бы ни пришло: точки с запятой и
@@ -67,19 +96,25 @@ edit_server()   { _rewrite_conf "$1" "$2"; }     # $1 = старое, $2 = но�
 # Создать: printf '%s' 'пароль' | sha256sum | cut -c1-64 > /mnt/flash/shell.pass
 check_pass() {
     [ -f "$PASS_FILE" ] || return 0
-    clear
-    printf "Password: "
-    stty -echo
-    read -r try
-    stty echo
-    printf "\n"
-    hash=$(printf '%s' "$try" | sha256sum | cut -c1-64)
     stored=$(tr -d ' \t\r\n' < "$PASS_FILE")
-    if [ "$hash" != "$stored" ]; then
-        echo "Wrong password"
-        sleep 1
-        return 1
-    fi
+    tries=3
+    while [ "$tries" -gt 0 ]; do
+        clear
+        echo "=== Settings (locked) ==="
+        echo
+        printf "Password: "
+        read_password
+        hash=$(printf '%s' "$PW" | sha256sum | cut -c1-64)
+        [ "$hash" = "$stored" ] && return 0
+        tries=$((tries - 1))
+        if [ "$tries" -gt 0 ]; then
+            echo "Wrong password, $tries left"
+            sleep 1
+        fi
+    done
+    echo "Wrong password"
+    sleep 1
+    return 1
 }
 
 open_shell() {
@@ -351,6 +386,7 @@ run_settings() {
     check_pass || return
     while true; do
         ui_menu "Settings" \
+            "Console${TAB}root shell" \
             "#Servers" \
             "Manage servers${TAB}add / edit / delete" \
             "#Network & RDP" \
@@ -358,15 +394,14 @@ run_settings() {
             "RDP defaults${TAB}$(_rdp_summary)" \
             "Printer${TAB}$(_printer_summary)" \
             "#System" \
-            "Diagnostics" \
-            "Console"
+            "Diagnostics"
         case "$UICHOICE" in
-            0) manage_loop ;;
-            1) set_network ;;
-            2) rdp_defaults_menu ;;
-            3) printer_menu ;;
-            4) run_diag ;;
-            5) open_shell ;;
+            0) open_shell ;;
+            1) manage_loop ;;
+            2) set_network ;;
+            3) rdp_defaults_menu ;;
+            4) printer_menu ;;
+            5) run_diag ;;
             *) return ;;      # BACK / пусто
         esac
     done
