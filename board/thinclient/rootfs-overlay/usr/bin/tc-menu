@@ -10,18 +10,25 @@ TAB=$(printf '\t')
 CR=$(printf '\r')       # Enter на консоли шлёт CR
 BS=$(printf '\b')       # Backspace
 DEL=$(printf '\177')    # DEL (тоже забой на многих терминалах)
+ESC=$(printf '\033')    # Esc — отмена/назад
 export TERM=linux
 
 # Ввод пароля с эхом '*' (результат в PW). Читаем побайтно через stty+dd —
 # портативно (busybox read -s/-n1 может отсутствовать). Backspace стирает.
-read_password() {
+read_password() {   # PW=результат; код возврата 1 = отмена (Esc, либо q на пустом)
     PW=""
+    _rc=0
     _sv=$(stty -g 2>/dev/null)
     stty -echo -icanon min 1 time 0 2>/dev/null
     while true; do
         c=$(dd bs=1 count=1 2>/dev/null)
         case "$c" in
             ""|"$CR") break ;;                 # Enter (LF -> пусто в $(), либо CR)
+            "$ESC") _rc=1; break ;;            # Esc -> отмена
+            q|Q)
+                if [ -z "$PW" ]; then _rc=1; break; fi   # q на пустом вводе -> отмена
+                PW="$PW$c"; printf '*'
+                ;;
             "$BS"|"$DEL")
                 if [ -n "$PW" ]; then
                     PW=${PW%?}
@@ -36,6 +43,7 @@ read_password() {
     done
     if [ -n "$_sv" ]; then stty "$_sv" 2>/dev/null; else stty sane 2>/dev/null; fi
     printf '\n'
+    return $_rc
 }
 
 # есть ли глобальный IPv4 (не lo, не link-local)
@@ -150,15 +158,15 @@ check_pass() {
         clear
         echo "=== Settings (locked) ==="
         echo
+        echo "Enter password to continue,"
+        echo "or press  q / Esc  to go back to the menu."
+        echo
         printf "Password: "
-        read_password
+        read_password || return 1        # q/Esc -> назад в меню (бухгалтер не застрянет)
         hash=$(printf '%s' "$PW" | sha256sum | cut -c1-64)
         [ "$hash" = "$stored" ] && return 0
         tries=$((tries - 1))
-        if [ "$tries" -gt 0 ]; then
-            echo "Wrong password, $tries left"
-            sleep 1
-        fi
+        [ "$tries" -gt 0 ] && { echo "Wrong password, $tries left"; sleep 1; }
     done
     echo "Wrong password"
     sleep 1
@@ -262,8 +270,9 @@ connect_error() {
     echo "Check: server address, network cable, ip in the corner of the menu."
     echo "Full log: console -> less /var/log/xsession.log"
     echo
-    printf "Press Enter to return to the menu..."
-    read -r _
+    printf "Press any key to return to the menu..."
+    _anykey
+    printf '\n'
 }
 
 # Экран диагностики: сеть, ping до шлюза, последние ошибки RDP-сессии.
@@ -292,8 +301,9 @@ run_diag() {
     grep -iE 'error|denied|refused|timeout|unreachable|failed' \
         /var/log/xsession.log 2>/dev/null | tail -5
     echo
-    printf "Press Enter to return to the menu..."
-    read -r _
+    printf "Press any key to return to the menu..."
+    _anykey
+    printf '\n'
 }
 
 # Раздел Settings — единый админ-экран из меню. Все экраны рисует лаунчер в

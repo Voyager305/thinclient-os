@@ -221,7 +221,7 @@ static void draw(int sel)
         attrset(COLOR_PAIR(C_HOST));
         mvaddstr(0, (COLS - 14) / 2, "Manage servers");
         attrset(COLOR_PAIR(C_INFO));
-        mvaddstr(LINES - 1, 1, "Enter/e edit   d delete   a add   q back");
+        mvaddstr(LINES - 1, 1, "Enter/e edit  d delete  a add  q/Esc back");
     }
 
     draw_buttons(sel, x0);
@@ -497,7 +497,7 @@ static void draw_menu(int sel)
     }
 
     attrset(COLOR_PAIR(C_INFO));
-    mvaddstr(LINES - 1, 1, "Up/Down select   Enter select   q back");
+    mvaddstr(LINES - 1, 1, "Up/Down select   Enter ok   q/Esc back");
     refresh();
 }
 
