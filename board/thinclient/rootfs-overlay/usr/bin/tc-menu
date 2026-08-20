@@ -7,44 +7,10 @@ CONF=/mnt/flash/servers.conf
 PASS_FILE=/mnt/flash/shell.pass
 OUT=/tmp/tc-choice
 TAB=$(printf '\t')
-CR=$(printf '\r')       # Enter на консоли шлёт CR
-BS=$(printf '\b')       # Backspace
-DEL=$(printf '\177')    # DEL (тоже забой на многих терминалах)
-ESC=$(printf '\033')    # Esc — отмена/назад
 export TERM=linux
 
-# Ввод пароля с эхом '*' (результат в PW). Читаем побайтно через stty+dd —
-# портативно (busybox read -s/-n1 может отсутствовать). Backspace стирает.
-read_password() {   # PW=результат; код возврата 1 = отмена (Esc, либо q на пустом)
-    PW=""
-    _rc=0
-    _sv=$(stty -g 2>/dev/null)
-    stty -echo -icanon min 1 time 0 2>/dev/null
-    while true; do
-        c=$(dd bs=1 count=1 2>/dev/null)
-        case "$c" in
-            ""|"$CR") break ;;                 # Enter (LF -> пусто в $(), либо CR)
-            "$ESC") _rc=1; break ;;            # Esc -> отмена
-            q|Q)
-                if [ -z "$PW" ]; then _rc=1; break; fi   # q на пустом вводе -> отмена
-                PW="$PW$c"; printf '*'
-                ;;
-            "$BS"|"$DEL")
-                if [ -n "$PW" ]; then
-                    PW=${PW%?}
-                    printf '\b \b'
-                fi
-                ;;
-            *)
-                PW="$PW$c"
-                printf '*'
-                ;;
-        esac
-    done
-    if [ -n "$_sv" ]; then stty "$_sv" 2>/dev/null; else stty sane 2>/dev/null; fi
-    printf '\n'
-    return $_rc
-}
+# Экран ввода пароля на Settings рисует лаунчер (tc-launcher --password) —
+# ncurses-оболочка со звёздочками, как остальные меню (см. check_pass).
 
 # есть ли глобальный IPv4 (не lo, не link-local)
 _has_ip() {
@@ -153,23 +119,23 @@ edit_server()   { _rewrite_conf "$1" "$2"; }     # $1 = старое, $2 = но�
 check_pass() {
     [ -f "$PASS_FILE" ] || return 0
     stored=$(tr -d ' \t\r\n' < "$PASS_FILE")
+    msg=""
     tries=3
     while [ "$tries" -gt 0 ]; do
-        clear
-        echo "=== Settings (locked) ==="
-        echo
-        echo "Enter password to continue,"
-        echo "or press  q / Esc  to go back to the menu."
-        echo
-        printf "Password: "
-        read_password || return 1        # q/Esc -> назад в меню (бухгалтер не застрянет)
-        hash=$(printf '%s' "$PW" | sha256sum | cut -c1-64)
+        rm -f "$OUT"
+        # ncurses-экран пароля в стиле меню (звёздочки, q/Esc). Лаунчер НЕ в
+        # $() — он рисует в stdout; пароль читаем из файла $OUT. rc: 0 ввёл,
+        # 1 отмена (q/Esc) — тогда назад в меню (бухгалтер не застрянет).
+        if ! /usr/bin/tc-launcher --password "Settings (locked)" "$msg"; then
+            return 1
+        fi
+        pw=$(cat "$OUT" 2>/dev/null)
+        rm -f "$OUT"
+        hash=$(printf '%s' "$pw" | sha256sum | cut -c1-64)
         [ "$hash" = "$stored" ] && return 0
         tries=$((tries - 1))
-        [ "$tries" -gt 0 ] && { echo "Wrong password, $tries left"; sleep 1; }
+        msg="Wrong password, $tries left"
     done
-    echo "Wrong password"
-    sleep 1
     return 1
 }
 

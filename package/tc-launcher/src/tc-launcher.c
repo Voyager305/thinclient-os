@@ -21,6 +21,8 @@
  * Обобщённое меню (--menu <title> <file>, для экранов настроек tc-menu):
  *   <N>                     индекс выбранного пункта (0-based среди кликабельных)
  *   BACK                    q/Esc
+ * Экран пароля (--password <title> [message]): пароль пишется в файл, код
+ *   возврата 0 = введён, 1 = отмена (q/Esc). Звёздочки, красное message.
  *
  * ВАЖНО: набор действий должен совпадать со списком case в tc-menu.
  */
@@ -54,7 +56,8 @@ enum {
     C_BAR,        /* сегменты полосы действий */
     C_KEY,        /* клавиши в полосе действий */
     C_INFO,       /* приглушённый служебный текст */
-    C_HOST        /* hostname и ip в углу */
+    C_HOST,       /* hostname и ip в углу */
+    C_WARN        /* предупреждение (неверный пароль) — красный */
 };
 
 static void load_servers(void)
@@ -555,6 +558,77 @@ static void menu_mode(void)
     }
 }
 
+/* ---- экран ввода пароля: tc-launcher --password <title> [message] --------
+ * Центрированный тёмный экран (в стиле меню) с полем пароля и звёздочками.
+ * Enter -> пароль пишется в /tmp/tc-choice, возврат 0. Esc или 'q' на пустом
+ * поле -> возврат 1 (отмена). message (если задан) — красная строка снизу
+ * (напр. "Wrong password, 2 left"). Так экран пароля выглядит как остальные,
+ * а не голым текстом в углу. */
+static char pw_msg[80];
+
+static void draw_password(int len)
+{
+    int y = LINES / 2;
+    int x = (COLS - 44) / 2;
+    int i;
+
+    if (x < 0)
+        x = 0;
+    erase();
+    attrset(COLOR_PAIR(C_HOST));
+    addstr_cols(y - 3, (COLS - ucols(menu_title)) / 2, menu_title, COLS);
+    attrset(COLOR_PAIR(C_NORM));
+    mvaddstr(y, x, "Password: ");
+    for (i = 0; i < len; i++)
+        addch('*');
+    if (pw_msg[0]) {
+        attrset(COLOR_PAIR(C_WARN));
+        addstr_cols(y + 2, x, pw_msg, COLS - x - 1);
+    }
+    attrset(COLOR_PAIR(C_INFO));
+    mvaddstr(y + 4, x, "Enter - ok      q / Esc - cancel");
+    move(y, x + 10 + len);
+    refresh();
+}
+
+static int password_mode(void)   /* 0 = введён (в файле), 1 = отмена */
+{
+    char buf[128];
+    int len = 0;
+
+    curs_set(1);
+    for (;;) {
+        int c;
+
+        draw_password(len);
+        c = getch();
+        if (c == ERR)
+            continue;
+        if (c == '\n' || c == '\r' || c == KEY_ENTER) {
+            FILE *f;
+
+            buf[len] = 0;
+            endwin();
+            f = fopen(OUTFILE, "w");
+            if (f) { fputs(buf, f); fclose(f); }
+            memset(buf, 0, sizeof buf);
+            return 0;
+        }
+        if (c == 27 || ((c == 'q' || c == 'Q') && len == 0)) {
+            endwin();
+            memset(buf, 0, sizeof buf);
+            return 1;                       /* отмена (Esc / q на пустом) */
+        }
+        if (c == KEY_BACKSPACE || c == 127 || c == 8) {
+            if (len > 0)
+                len--;
+            continue;
+        }
+        if (c >= 32 && c < 127 && len < (int)sizeof buf - 1)
+            buf[len++] = (char)c;
+    }
+}
+
 /* инициализация ncurses/палитры — общая для главного экрана и меню */
 static void ui_init(void)
 {
@@ -567,6 +641,7 @@ static void ui_init(void)
     init_pair(C_KEY,  COLOR_WHITE, COLOR_BLACK);
     init_pair(C_INFO, COLOR_BLUE,  COLOR_BLACK);
     init_pair(C_HOST, COLOR_YELLOW, COLOR_BLACK);
+    init_pair(C_WARN, COLOR_RED,   COLOR_BLACK);
     bkgd(COLOR_PAIR(C_NORM));
     cbreak();
     noecho();
@@ -589,6 +664,17 @@ int main(int argc, char **argv)
         ui_init();
         menu_mode();
         return 0;
+    }
+
+    /* экран пароля: tc-launcher --password <title> [message] */
+    if (argc > 1 && strcmp(argv[1], "--password") == 0) {
+        if (argc < 3)
+            return 1;
+        snprintf(menu_title, sizeof menu_title, "%s", argv[2]);
+        if (argc > 3)
+            snprintf(pw_msg, sizeof pw_msg, "%s", argv[3]);
+        ui_init();
+        return password_mode();      /* 0 = пароль в /tmp/tc-choice, 1 = отмена */
     }
 
     if (argc > 1 && strcmp(argv[1], "--manage") == 0) {
