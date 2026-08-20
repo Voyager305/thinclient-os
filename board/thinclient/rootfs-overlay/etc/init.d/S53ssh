@@ -20,15 +20,14 @@ KG=/usr/bin/dropbearkey
 #    первой генерации) перегенерим — иначе sshd рвёт коннекты;
 #  - пишем во временный файл и mv — атомарно, без «полу-ключа».
 gen_key() {   # $1=rsa|ecdsa  $2=путь
+    rm -f "$2.tmp" "$2.tmp.pub"        # подчистить временные (в т.ч. от старого образа)
     if [ -s "$2" ] && "$KG" -y -f "$2" >/dev/null 2>&1; then
-        return 0                      # ключ есть и валиден
+        return 0                       # ключ есть и валиден
     fi
-    rm -f "$2" "$2.tmp"
-    if "$KG" -t "$1" -f "$2.tmp" >/dev/null 2>&1; then
-        mv "$2.tmp" "$2"
-    else
-        rm -f "$2.tmp"
-    fi
+    rm -f "$2"
+    "$KG" -t "$1" -f "$2.tmp" >/dev/null 2>&1 && mv "$2.tmp" "$2"
+    # dropbearkey кладёт рядом ещё и <key>.pub — убираем, чтоб не мусорить
+    rm -f "$2.tmp" "$2.tmp.pub"
 }
 
 start() {
