@@ -31,3 +31,16 @@ rm -f "$TARGET_DIR/etc/init.d/S50dropbear"
 # 10-fbdev.conf overlay сам не удалит — иначе он остаётся в target и снова
 # форсит Driver "fbdev" ("no screens found" на реальном Intel/KMS).
 rm -f "$TARGET_DIR/etc/X11/xorg.conf.d/10-fbdev.conf"
+
+# sudo: наш sudoers.d-файл должен быть 0440 root:root, иначе sudo его молча
+# игнорирует (проверка прав). Каталог — не world-writable. И гарантируем, что
+# /etc/sudoers подключает каталог (у пакета sudo это обычно уже есть).
+if [ -f "$TARGET_DIR/etc/sudoers.d/thinclient" ]; then
+    chown 0:0  "$TARGET_DIR/etc/sudoers.d/thinclient" 2>/dev/null || true
+    chmod 0440 "$TARGET_DIR/etc/sudoers.d/thinclient"
+fi
+[ -d "$TARGET_DIR/etc/sudoers.d" ] && chmod 0750 "$TARGET_DIR/etc/sudoers.d"
+if [ -f "$TARGET_DIR/etc/sudoers" ] && \
+   ! grep -q '^#includedir /etc/sudoers.d' "$TARGET_DIR/etc/sudoers"; then
+    echo '#includedir /etc/sudoers.d' >> "$TARGET_DIR/etc/sudoers"
+fi

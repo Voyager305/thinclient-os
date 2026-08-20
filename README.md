@@ -216,6 +216,21 @@ TC_ROOT_PASSWORD='свой-пароль' ./build.sh
   `etc/default/dropbear` со строкой `DROPBEAR_ARGS="-s -g"` — но у нас dropbear
   запускается своим `S53ssh`, так что проще отредактировать его.
 
+### Непривилегированный пользователь `user`
+
+Для входа по SSH в образ вшит пользователь **`user`** с паролем **`1234`** и
+правом **sudo** (`/etc/sudoers.d/thinclient`). Логин: `ssh user@<ip>` →
+`sudo -i` для root-прав. Пароль задан в `board/thinclient/users.table`
+(поле `=1234` → Buildroot шифрует sha-512).
+
+> ⚠️ `1234` — **слабый пароль по умолчанию**, к тому же с полным sudo это
+> фактически root по SSH. Для боевого парка поменяй его в `users.table` и
+> пересобери, либо `passwd user` в рантайме (эфемерно — система в RAM), либо
+> сузь права в `sudoers.d`. Не оставляй `1234` в проде.
+
+Полноценные `useradd`/`usermod`/`userdel`/`groupadd` (пакет `shadow`) есть в
+образе — админ может завести ещё юзеров в рантайме (тоже эфемерно, до ребута).
+
 ## Структура репозитория
 
 ```
@@ -230,10 +245,12 @@ board/thinclient/
   syslinux.cfg                     загрузчик BIOS (NOESCAPE), консоль на tty2
   grub-efi.cfg                     загрузчик UEFI (встраивается в bootX.efi)
   servers.conf.sample              стартовый список серверов
-  post-build.sh                    чистка target (автозапуск X и т.п.)
+  users.table                      вшитый юзер user/1234 (SSH + sudo)
+  post-build.sh                    чистка target (автозапуск X и т.п.), права sudoers.d
   post-image.sh                    сборка usb.img (MBR+FAT32) и hybrid ISO+EFI
   rootfs-overlay/
     etc/inittab                    tc-menu на tty1, getty на tty2
+    etc/sudoers.d/thinclient       user -> sudo (0440 root:root)
     etc/X11/xorg.conf.d/10-video.conf  X через modesetting(KMS) + DontVTSwitch/DontZap
     etc/init.d/S00splash           заставка psplash
     etc/init.d/S02watchdog         сторож /dev/watchdog (если есть)
