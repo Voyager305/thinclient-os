@@ -386,22 +386,22 @@ run_settings() {
     check_pass || return
     while true; do
         ui_menu "Settings" \
-            "Console${TAB}root shell" \
             "#Servers" \
             "Manage servers${TAB}add / edit / delete" \
+            "#System" \
+            "Console${TAB}root shell" \
+            "Diagnostics${TAB}network / ping / logs" \
             "#Network & RDP" \
             "Network${TAB}$(_net_mode)" \
             "RDP defaults${TAB}$(_rdp_summary)" \
-            "Printer${TAB}$(_printer_summary)" \
-            "#System" \
-            "Diagnostics"
+            "Printer${TAB}$(_printer_summary)"
         case "$UICHOICE" in
-            0) open_shell ;;
-            1) manage_loop ;;
-            2) set_network ;;
-            3) rdp_defaults_menu ;;
-            4) printer_menu ;;
-            5) run_diag ;;
+            0) manage_loop ;;
+            1) open_shell ;;
+            2) run_diag ;;
+            3) set_network ;;
+            4) rdp_defaults_menu ;;
+            5) printer_menu ;;
             *) return ;;      # BACK / пусто
         esac
     done
