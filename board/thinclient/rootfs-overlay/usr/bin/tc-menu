@@ -190,12 +190,13 @@ run_diag() {
     read -r _
 }
 
-# Раздел Settings — единый админ-экран из меню. Сверху правка tc.conf (сеть,
-# RDP-дефолты, принтер, имя хоста) безопасным tc-setconf (ремоунт rw/ro, без
-# eval), снизу — управление серверами, диагностика и консоль. Вход опционально
-# паролится (check_pass / shell.pass на флешке).
+# Раздел Settings — единый админ-экран из меню. Все экраны рисует лаунчер в
+# режиме --menu (стрелки+Enter, тот же тёмный стиль, что и главный экран), а
+# tc-menu исполняет выбор. Правка tc.conf идёт безопасным tc-setconf (ремоунт
+# rw/ro, без eval). Вход в раздел опционально паролится (check_pass/shell.pass).
 SET=/usr/bin/tc-setconf
 GET=/usr/bin/tc-getconf
+UIITEMS=/tmp/tc-menu-items
 
 _net_mode() {
     ip=$($GET STATIC_IP)
@@ -207,6 +208,40 @@ _flash_rw_ok() {
     mount -o remount,rw /mnt/flash 2>/dev/null || return 1
     mount -o remount,ro /mnt/flash 2>/dev/null
     return 0
+}
+
+# Интерактивное меню через лаунчер (стрелки+Enter). $1 — заголовок; далее
+# пункты по одному аргументу:
+#   "#Секция"          — некликабельный заголовок
+#   "label"            — пункт
+#   "label<TAB>right"  — пункт + правая колонка (текущее значение)
+# Результат кладём в глобальную UICHOICE: индекс выбранного пункта (0-based
+# среди кликабельных) или BACK (q/Esc).
+# ВАЖНО: лаунчер (ncurses) рисует в stdout — его НЕЛЬЗЯ звать внутри $(...),
+# иначе вывод уйдёт в пайп, а не на экран. Поэтому результат читаем из файла
+# $OUT в переменную, как это делает главный цикл.
+ui_menu() {
+    _title=$1; shift
+    : > "$UIITEMS"
+    for _it in "$@"; do
+        printf '%s\n' "$_it" >> "$UIITEMS"
+    done
+    rm -f "$OUT"
+    /usr/bin/tc-launcher --menu "$_title" "$UIITEMS"
+    UICHOICE=$(cat "$OUT" 2>/dev/null)
+}
+
+_note() { clear; echo "$1"; sleep 2; }
+
+# короткие сводки для правой колонки главного экрана Settings
+_rdp_summary() {
+    _u=$($GET RDP_USER); _d=$($GET RDP_DOMAIN)
+    [ -n "$_d" ] && _u="$_d\\$_u"
+    [ -n "$_u" ] && printf '%s' "$_u" || printf '\342\200\224'   # —
+}
+_printer_summary() {
+    _p=$($GET PRINTER)
+    [ -n "$_p" ] && printf '%s' "$_p" || printf '\342\200\224'   # —
 }
 
 # Правка одного текстового ключа: Enter пустым — оставить; '-' — очистить.
@@ -228,36 +263,27 @@ set_key() {   # $1=KEY  $2=подпись
 
 set_network() {
     if ! _flash_rw_ok; then
-        clear
-        echo "Носитель только для чтения (ISO) — сеть в tc.conf не сохранить."
-        printf "Enter — назад..."
-        read -r _
+        _note "Носитель только для чтения (ISO) — сеть в tc.conf не сохранить."
         return
     fi
-    clear
-    echo "=== Сеть ==="
-    echo "Сейчас: $(_net_mode)"
-    echo
-    echo " 1) DHCP (очистить статику)"
-    echo " 2) Статический IP"
-    echo " q) назад"
-    printf "> "
-    read -r c
-    case "$c" in
-        1)
+    ui_menu "Сеть (сейчас: $(_net_mode))" \
+        "DHCP — получать адрес автоматически" \
+        "Статический IP"
+    case "$UICHOICE" in
+        0)
             $SET STATIC_IP ""; $SET GATEWAY ""; $SET DNS ""
-            echo "Переключено на DHCP. Применится после ребута (или tc-netup)."
-            sleep 2
+            _note "Переключено на DHCP. Применится после ребута (или tc-netup)."
             ;;
-        2)
+        1)
+            clear
+            echo "=== Статический IP ==="
             printf "IP/маска (напр. 192.168.0.50/24): "; read -r a
             [ -n "$a" ] && $SET STATIC_IP "$a"
             printf "Шлюз (напр. 192.168.0.1): ";        read -r g
             [ -n "$g" ] && $SET GATEWAY "$g"
             printf "DNS (напр. 192.168.0.1): ";         read -r d
             [ -n "$d" ] && $SET DNS "$d"
-            echo "Сохранено. Применится после ребута (или tc-netup)."
-            sleep 2
+            _note "Сохранено. Применится после ребута (или tc-netup)."
             ;;
         *) ;;
     esac
@@ -266,25 +292,15 @@ set_network() {
 # Под-экран «RDP по умолчанию»: логин, домен, автоподключение.
 rdp_defaults_menu() {
     while true; do
-        clear
-        echo "=== RDP по умолчанию ==="
-        echo "Логин:        $($GET RDP_USER)"
-        echo "Домен:        $($GET RDP_DOMAIN)"
-        echo "Автоконнект:  $($GET AUTOCONNECT)"
-        echo
-        echo " 1) Логин"
-        echo " 2) Домен"
-        echo " 3) Автоподключение (IP или список через запятую — failover)"
-        echo " q) Назад"
-        echo
-        printf "> "
-        read -r c
-        case "$c" in
-            1) set_key RDP_USER    "RDP логин по умолчанию" ;;
-            2) set_key RDP_DOMAIN  "RDP домен по умолчанию" ;;
-            3) set_key AUTOCONNECT "Автоподключение (IP или список через запятую)" ;;
-            q|Q|"") return ;;
-            *) ;;
+        ui_menu "RDP по умолчанию" \
+            "Логин${TAB}$($GET RDP_USER)" \
+            "Домен${TAB}$($GET RDP_DOMAIN)" \
+            "Автоподключение${TAB}$($GET AUTOCONNECT)"
+        case "$UICHOICE" in
+            0) set_key RDP_USER    "RDP логин по умолчанию" ;;
+            1) set_key RDP_DOMAIN  "RDP домен по умолчанию" ;;
+            2) set_key AUTOCONNECT "Автоподключение (IP или список через запятую)" ;;
+            *) return ;;
         esac
     done
 }
@@ -292,27 +308,13 @@ rdp_defaults_menu() {
 # Под-экран «Принтер»: сетевой принтер, пробрасываемый в RDP-сессию.
 printer_menu() {
     while true; do
-        clear
-        echo "=== Принтер (проброс в RDP-сессию) ==="
-        echo "URI:   $($GET PRINTER)"
-        echo "Имя:   $($GET PRINTER_NAME)"
-        echo
-        echo "Сетевой принтер. Примеры URI:"
-        echo "  socket://192.168.0.20:9100   JetDirect/AppSocket (частый)"
-        echo "  lpd://192.168.0.20/queue     LPD"
-        echo "  ipp://host/ipp/print         IPP (ipps:// — с TLS)"
-        echo
-        echo " 1) URI принтера"
-        echo " 2) Имя очереди (как увидит Windows)"
-        echo " q) Назад"
-        echo
-        printf "> "
-        read -r c
-        case "$c" in
-            1) set_key PRINTER      "URI сетевого принтера (напр. socket://192.168.0.20:9100)" ;;
-            2) set_key PRINTER_NAME "Имя очереди принтера (по умолчанию printer)" ;;
-            q|Q|"") return ;;
-            *) ;;
+        ui_menu "Принтер (проброс в RDP)" \
+            "URI принтера${TAB}$($GET PRINTER)" \
+            "Имя очереди${TAB}$($GET PRINTER_NAME)"
+        case "$UICHOICE" in
+            0) set_key PRINTER      "URI сетевого принтера (socket://ip:9100, lpd://ip/queue, ipp://host/...)" ;;
+            1) set_key PRINTER_NAME "Имя очереди принтера (как увидит Windows; по умолчанию printer)" ;;
+            *) return ;;
         esac
     done
 }
@@ -323,37 +325,26 @@ printer_menu() {
 run_settings() {
     check_pass || return
     while true; do
-        clear
-        echo "=== Settings ==="
-        echo "Хост: $($GET HOSTNAME)    Сеть: $(_net_mode)"
-        echo
-        echo "-- Серверы --"
-        echo "  1) Manage servers     добавить / изменить / удалить"
-        echo
-        echo "-- Сеть и RDP --"
-        echo "  2) Network            DHCP / статический IP"
-        echo "  3) RDP defaults       логин / домен / автоконнект"
-        echo "  4) Printer            сетевой принтер"
-        echo
-        echo "-- Система --"
-        echo "  5) Hostname           имя хоста"
-        echo "  6) Diagnostics        интерфейсы / ping / логи"
-        echo "  7) Console            root-консоль (bash)"
-        echo
-        echo "  q) Назад в меню"
-        echo
-        printf "> "
-        read -r c
-        case "$c" in
-            1) manage_loop ;;
-            2) set_network ;;
-            3) rdp_defaults_menu ;;
-            4) printer_menu ;;
-            5) set_key HOSTNAME "Имя хоста" ;;
-            6) run_diag ;;
-            7) open_shell ;;
-            q|Q|"") return ;;
-            *) ;;
+        ui_menu "Settings" \
+            "#Серверы" \
+            "Manage servers${TAB}добавить / изменить / удалить" \
+            "#Сеть и RDP" \
+            "Network${TAB}$(_net_mode)" \
+            "RDP defaults${TAB}$(_rdp_summary)" \
+            "Printer${TAB}$(_printer_summary)" \
+            "#Система" \
+            "Hostname${TAB}$($GET HOSTNAME)" \
+            "Diagnostics" \
+            "Console"
+        case "$UICHOICE" in
+            0) manage_loop ;;
+            1) set_network ;;
+            2) rdp_defaults_menu ;;
+            3) printer_menu ;;
+            4) set_key HOSTNAME "Имя хоста" ;;
+            5) run_diag ;;
+            6) open_shell ;;
+            *) return ;;      # BACK / пусто
         esac
     done
 }

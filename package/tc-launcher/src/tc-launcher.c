@@ -18,6 +18,9 @@
  *   EDIT <old>\t<new>       заменить запись сервера
  *   DELETE <name>;<ip>      удалить сервер
  *   BACK                    выйти из экрана управления
+ * Обобщённое меню (--menu <title> <file>, для экранов настроек tc-menu):
+ *   <N>                     индекс выбранного пункта (0-based среди кликабельных)
+ *   BACK                    q/Esc
  *
  * ВАЖНО: набор действий должен совпадать со списком case в tc-menu.
  */
@@ -345,20 +348,216 @@ static void bar_action(int bsel)
     write_choice(act[bsel], NULL, NULL);
 }
 
-int main(int argc, char **argv)
-{
-    int sel = 0;
-    int total;
+/* ---- обобщённый режим меню: tc-launcher --menu <title> <file> ----------
+ * Рисует вертикальный список стрелками в стиле главного экрана; пункты берёт
+ * из файла (строка = пункт). Формат строки:
+ *   "#Заголовок"     — некликабельный заголовок секции (приглушённый)
+ *   "label"          — пункт
+ *   "label\tсправа"  — пункт + правая приглушённая колонка (текущее значение)
+ * В /tmp/tc-choice пишет индекс выбранного пункта (0-based среди КЛИКАБЕЛЬНЫХ)
+ * либо BACK (q/Esc). Так tc-menu делает настройки настоящим меню, а не
+ * «набери цифру». */
+#define MAXMENU 64
+struct mitem {
+    char label[96];
+    char right[96];
+    int header;
+};
+static struct mitem mitems[MAXMENU];
+static int nmit;
+static char menu_title[128];
 
-    if (argc > 1 && strcmp(argv[1], "--manage") == 0) {
-        manage = 1;
-        nbar = 0;               /* в режиме управления нет сервис-кнопок */
+/* число колонок (примерно): считаем ведущие байты UTF-8, не продолжения */
+static int ucols(const char *s)
+{
+    int n = 0;
+
+    for (; *s; s++)
+        if (((unsigned char)*s & 0xC0) != 0x80)
+            n++;
+    return n;
+}
+
+/* напечатать не более maxcols колонок строки (режем по границе символа UTF-8) */
+static void addstr_cols(int y, int x, const char *s, int maxcols)
+{
+    int cols = 0, bytes = 0;
+
+    while (s[bytes] && cols < maxcols) {
+        unsigned char ch = (unsigned char)s[bytes];
+        int adv = 1;
+
+        if (ch >= 0xF0)
+            adv = 4;
+        else if (ch >= 0xE0)
+            adv = 3;
+        else if (ch >= 0xC0)
+            adv = 2;
+        bytes += adv;
+        cols++;
+    }
+    mvaddnstr(y, x, s, bytes);
+}
+
+static void load_menu(const char *path)
+{
+    FILE *f = fopen(path, "r");
+    char line[256];
+
+    nmit = 0;
+    if (!f)
+        return;
+    while (fgets(line, sizeof line, f) && nmit < MAXMENU) {
+        char *tab;
+
+        line[strcspn(line, "\r\n")] = 0;
+        if (line[0] == '#') {
+            mitems[nmit].header = 1;
+            snprintf(mitems[nmit].label, sizeof mitems[nmit].label, "%s", line + 1);
+            mitems[nmit].right[0] = 0;
+        } else {
+            mitems[nmit].header = 0;
+            tab = strchr(line, '\t');
+            if (tab) {
+                *tab = 0;
+                snprintf(mitems[nmit].right, sizeof mitems[nmit].right, "%s", tab + 1);
+            } else {
+                mitems[nmit].right[0] = 0;
+            }
+            snprintf(mitems[nmit].label, sizeof mitems[nmit].label, "%s", line);
+        }
+        nmit++;
+    }
+    fclose(f);
+}
+
+/* порядковый номер строки row среди кликабельных (заголовки не считаем) */
+static int sel_ordinal(int row)
+{
+    int k = 0, i;
+
+    for (i = 0; i < row; i++)
+        if (!mitems[i].header)
+            k++;
+    return k;
+}
+
+static void draw_menu(int sel)
+{
+    char info[160];
+    int top = (LINES - 1 - nmit) / 2;
+    int x0 = (COLS - LIST_W) / 2;
+    int i, y;
+
+    if (top < 1)
+        top = 1;
+    if (x0 < 0)
+        x0 = 0;
+
+    erase();
+
+    /* hostname/ip слева, заголовок меню по центру — как на главном экране */
+    get_info(info, sizeof info);
+    attrset(COLOR_PAIR(C_HOST));
+    mvaddstr(0, 1, info);
+    attrset(COLOR_PAIR(C_HOST));
+    addstr_cols(0, (COLS - ucols(menu_title)) / 2, menu_title, COLS);
+
+    for (i = 0; i < nmit; i++) {
+        int lcols;
+
+        y = top + i;
+        if (mitems[i].header) {
+            attrset(COLOR_PAIR(C_INFO));
+            addstr_cols(y, x0 + 1, mitems[i].label, LIST_W - 2);
+            continue;
+        }
+        attrset(COLOR_PAIR(i == sel ? C_SEL : C_NORM));
+        mvhline(y, x0, ' ', LIST_W);
+        addstr_cols(y, x0 + 2, mitems[i].label, NAME_W);
+
+        if (mitems[i].right[0]) {
+            int rc = ucols(mitems[i].right);
+
+            lcols = ucols(mitems[i].label);
+            if (lcols > NAME_W)
+                lcols = NAME_W;
+            if (i != sel)
+                attrset(COLOR_PAIR(C_IP));
+            if (rc <= LIST_W - lcols - 5) {
+                addstr_cols(y, x0 + LIST_W - rc - 1, mitems[i].right, rc);
+            } else {
+                /* не влезает целиком — обрезаем после метки */
+                int avail = LIST_W - lcols - 5;
+
+                if (avail > 1)
+                    addstr_cols(y, x0 + 3 + lcols, mitems[i].right, avail);
+            }
+        }
     }
 
-    load_servers();
-    /* main: серверы + кнопки; manage: серверы + слот "+ Add server" */
-    total = nsrv + addslot() + nbar;
+    attrset(COLOR_PAIR(C_INFO));
+    mvaddstr(LINES - 1, 1, "Стрелки - выбор, Enter - ок, q - назад");
+    refresh();
+}
 
+static void menu_mode(void)
+{
+    int sel = -1, i;
+
+    for (i = 0; i < nmit; i++)
+        if (!mitems[i].header) {
+            sel = i;
+            break;
+        }
+    if (sel < 0) {                       /* нет кликабельных пунктов */
+        endwin();
+        write_choice("BACK", NULL, NULL);
+        return;
+    }
+
+    for (;;) {
+        int c;
+
+        draw_menu(sel);
+        c = getch();
+        switch (c) {
+        case ERR:
+            break;
+        case KEY_UP:
+        case 'k':
+            do { sel = (sel + nmit - 1) % nmit; } while (mitems[sel].header);
+            break;
+        case KEY_DOWN:
+        case 'j':
+        case '\t':
+            do { sel = (sel + 1) % nmit; } while (mitems[sel].header);
+            break;
+        case '\n':
+        case '\r':
+        case KEY_ENTER: {
+            char buf[16];
+
+            endwin();
+            snprintf(buf, sizeof buf, "%d", sel_ordinal(sel));
+            write_choice("%s", buf, NULL);
+            return;
+        }
+        case 'q':
+        case 'Q':
+        case 27:               /* Esc */
+            endwin();
+            write_choice("BACK", NULL, NULL);
+            return;
+        default:
+            break;
+        }
+    }
+}
+
+/* инициализация ncurses/палитры — общая для главного экрана и меню */
+static void ui_init(void)
+{
     initscr();
     start_color();
     init_pair(C_NORM, COLOR_WHITE, COLOR_BLACK);
@@ -374,6 +573,34 @@ int main(int argc, char **argv)
     curs_set(0);
     keypad(stdscr, TRUE);
     timeout(1000);          /* раз в секунду перерисовка: обновляет ip в углу */
+}
+
+int main(int argc, char **argv)
+{
+    int sel = 0;
+    int total;
+
+    /* обобщённое меню для tc-menu: tc-launcher --menu <title> <file> */
+    if (argc > 1 && strcmp(argv[1], "--menu") == 0) {
+        if (argc < 4)
+            return 1;
+        snprintf(menu_title, sizeof menu_title, "%s", argv[2]);
+        load_menu(argv[3]);
+        ui_init();
+        menu_mode();
+        return 0;
+    }
+
+    if (argc > 1 && strcmp(argv[1], "--manage") == 0) {
+        manage = 1;
+        nbar = 0;               /* в режиме управления нет сервис-кнопок */
+    }
+
+    load_servers();
+    /* main: серверы + кнопки; manage: серверы + слот "+ Add server" */
+    total = nsrv + addslot() + nbar;
+
+    ui_init();
 
     for (;;) {
         int c;
