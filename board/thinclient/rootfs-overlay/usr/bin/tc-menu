@@ -102,10 +102,31 @@ open_shell() {
     cd /
 }
 
-run_session() {   # $1 = сервер; код возврата = rc сессии (255 = X не поднялся)
+# Быстрая проверка доступности RDP-порта БЕЗ запуска X. Неответивший сервер
+# (неверный IP, сервер выключен, чужая сеть — напр. NAT в UTM) иначе даёт
+# чёрный экран на всё время таймаута xfreerdp. Тут через bash /dev/tcp
+# (net-redirections включены в bash) + timeout: нет коннекта за 4с → ошибка
+# сразу в консоли. Нет bash — проверку пропускаем (старое поведение).
+_rdp_reachable() {   # $1 = host | host:port ; код 0 = порт открыт
+    [ -x /bin/bash ] || return 0
+    _h=${1%%:*}
+    case "$1" in
+        *:*) _p=${1##*:} ;;
+        *)   _p=3389 ;;
+    esac
+    timeout 4 /bin/bash -c "exec 3<>/dev/tcp/$_h/$_p" 2>/dev/null
+}
+
+run_session() {   # $1 = сервер; rc: 0 ок, 254 недоступен, 255 X не поднялся
     clear
     echo "Connecting to $1 ..."
     rm -f /tmp/rdp-status
+    # сервера не видно — не поднимаем X (иначе чёрный экран на таймаут)
+    if ! _rdp_reachable "$1"; then
+        echo "unreachable: no TCP connect to $1 (RDP port)" > /var/log/xsession.log
+        echo 254 > /tmp/rdp-status
+        return 254
+    fi
     # X живёт только пока идёт RDP-сессия; вышел из Windows — вернулся в меню
     xinit /usr/bin/tc-session "$1" -- -nolisten tcp >/var/log/xsession.log 2>&1
     # если X умер грязно и оставил VT в графическом режиме — вернуть консоль
@@ -118,7 +139,9 @@ run_session() {   # $1 = сервер; код возврата = rc сессии
 connect() {   # ручное подключение из меню: при провале — экран ошибки
     run_session "$1"
     rc=$?
-    if [ "$rc" = 255 ]; then
+    if [ "$rc" = 254 ]; then
+        connect_error "$1" "server unreachable — no route or RDP port closed"
+    elif [ "$rc" = 255 ]; then
         connect_error "$1" "X server failed to start"
     elif [ "$rc" != 0 ]; then
         connect_error "$1" "xfreerdp exited with code $rc"
