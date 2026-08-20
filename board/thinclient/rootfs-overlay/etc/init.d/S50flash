@@ -8,7 +8,9 @@
 
 MNT=/mnt/flash
 TMP=/tmp/iso-src
-SEED=/tmp/servers.seed
+SEEDDIR=/tmp/cfg-seed
+# файлы конфига, переносимые с ISO на свежесозданный раздел TCDATA
+CFGFILES="servers.conf tc.conf shell.pass authorized_keys"
 
 find_vfat() {
     for dev in /dev/sd[a-z][0-9] /dev/mmcblk[0-9]p[0-9]; do
@@ -63,10 +65,10 @@ make_data_part() {
     # свежесозданный или недосеянный раздел: кладём стартовый конфиг
     mount -t vfat "$part" "$MNT" 2>/dev/null || return 1
     if [ ! -f "$MNT/servers.conf" ]; then
-        cp "$SEED" "$MNT/servers.conf" 2>/dev/null || {
-            umount "$MNT"
-            return 1
-        }
+        for f in $CFGFILES; do
+            [ -f "$SEEDDIR/$f" ] && cp "$SEEDDIR/$f" "$MNT/$f" 2>/dev/null
+        done
+        [ -f "$MNT/servers.conf" ] || { umount "$MNT"; return 1; }
         sync
     fi
     mount -o remount,ro "$MNT"
@@ -93,7 +95,10 @@ case "$1" in
 
         # конфиг с ISO пригодится как затравка; отмонтируем перед разметкой,
         # иначе ядро не перечитает таблицу разделов
-        cp "$TMP/servers.conf" "$SEED" 2>/dev/null
+        mkdir -p "$SEEDDIR"
+        for f in $CFGFILES; do
+            [ -f "$TMP/$f" ] && cp "$TMP/$f" "$SEEDDIR/$f" 2>/dev/null
+        done
         umount "$TMP"
 
         if make_data_part "$iso_dev"; then

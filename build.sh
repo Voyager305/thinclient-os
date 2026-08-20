@@ -25,9 +25,39 @@ BR_COMMIT=3386677f0a4d1c0150e772eb07cede05e88a2d6d
 IMAGE=thinclient-build
 VOLUME=thinclient-output
 
-# Пароль root задаётся при сборке: TC_ROOT_PASSWORD='...' ./build.sh
-# (вписывается в .config поверх небезопасной заглушки из defconfig).
+# ---- Единый конфиг площадки: site.env (шаблон — site.env.example) ----
+# Правишь ОДИН файл; из него в образ запекаются пароли/юзер/сеть/RDP/принтер/
+# серверы. Пароли и юзера (rootfs) берём здесь; флеш-часть (servers.conf/
+# tc.conf/shell.pass) генерит post-image.sh — тоже из site.env.
+if [ -f site.env ]; then
+    echo ">>> site.env найден — беру настройки оттуда"
+    # shellcheck disable=SC1091
+    . ./site.env
+fi
+
+# Пароль root: приоритет у переменной окружения TC_ROOT_PASSWORD, иначе
+# ROOT_PASSWORD из site.env. Вписывается в .config (олд-механизм, ниже).
+# Значение может быть открытым текстом ИЛИ готовым хэшем ($6$...) — Buildroot
+# понимает оба.
+TC_ROOT_PASSWORD="${TC_ROOT_PASSWORD:-$ROOT_PASSWORD}"
 export TC_ROOT_PASSWORD
+
+# Пользователь для SSH: генерим .site/users.table из site.env (имя/пароль;
+# дефолт user/1234). Пароль: начинается с '$' => готовый хэш (в таблицу как
+# есть), иначе '=текст' => Buildroot зашифрует sha-512. defconfig указывает
+# BR2_ROOTFS_USERS_TABLES на .site/users.table.
+TC_USER_NAME="${USER_NAME:-user}"
+TC_USER_PASSWORD="${USER_PASSWORD:-1234}"
+case "$TC_USER_PASSWORD" in
+    \$*) _upw="$TC_USER_PASSWORD" ;;    # уже хэш ($6$...)
+    *)   _upw="=$TC_USER_PASSWORD" ;;   # открытый текст
+esac
+mkdir -p .site
+cat > .site/users.table <<EOF
+# Сгенерировано build.sh из site.env — вручную не редактировать.
+# username uid group gid password home shell groups comment
+$TC_USER_NAME -1 $TC_USER_NAME -1 $_upw /home/$TC_USER_NAME /bin/bash - Thin client SSH user
+EOF
 
 # Версия образа (из git) → /etc/tc-release, показывается в углу меню.
 TC_VERSION=$(git describe --tags --always 2>/dev/null || echo dev)

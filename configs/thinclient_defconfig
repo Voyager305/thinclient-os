@@ -24,9 +24,9 @@ BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_THINCLIENT_PATH)/board/thinclient/rootfs-over
 BR2_ROOTFS_POST_BUILD_SCRIPT="$(BR2_EXTERNAL_THINCLIENT_PATH)/board/thinclient/post-build.sh"
 BR2_ROOTFS_POST_IMAGE_SCRIPT="$(BR2_EXTERNAL_THINCLIENT_PATH)/board/thinclient/post-image.sh"
 
-# Таблица пользователей: заводит непривилегированного user (для входа по SSH),
-# пароль по умолчанию 1234 — СЛАБЫЙ, поменяй в users.table или через passwd.
-BR2_ROOTFS_USERS_TABLES="$(BR2_EXTERNAL_THINCLIENT_PATH)/board/thinclient/users.table"
+# Таблица пользователей ГЕНЕРИТСЯ build.sh в .site/users.table из site.env
+# (имя/пароль user). Без site.env — дефолт user/1234. Файл .site/ в .gitignore.
+BR2_ROOTFS_USERS_TABLES="$(BR2_EXTERNAL_THINCLIENT_PATH)/.site/users.table"
 
 # Ядро: дефолтный конфиг арха + наш фрагмент (fb, i915/gma500, сетевухи, vfat, usb)
 BR2_LINUX_KERNEL=y

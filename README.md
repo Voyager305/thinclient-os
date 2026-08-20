@@ -151,7 +151,38 @@ NATIVE=1 ./build.sh        # Linux: нативная сборка без Docker
 Результат: `buildroot/output/images/{thinclient.iso,usb.img}`.
 Заливка: `./flash-usb.sh <устройство>` (macOS `/dev/diskN`, Linux `/dev/sdX`).
 
-**Пароль root задаётся при сборке** (см. раздел «Пароль root и SSH»):
+### Единый конфиг `site.env` — всё в одном файле
+
+Чтобы не править конфиг по десятку файлов, есть **один** файл `site.env`:
+пароли (root/user), имя пользователя, сеть, RDP-дефолты, принтер, пароль на
+Settings и список серверов — всё там. `./build.sh` запекает его в образ.
+
+```sh
+cp site.env.example site.env    # шаблон со всеми ключами и комментариями
+nano site.env                   # правишь ТОЛЬКО этот файл
+./build.sh                      # всё уходит в образ
+```
+
+`site.env` в `.gitignore` (не коммитится). Что он задаёт:
+
+| Ключ | Что | Куда запекается |
+|---|---|---|
+| `ROOT_PASSWORD` | пароль root | `/etc/shadow` |
+| `USER_NAME`, `USER_PASSWORD` | юзер для SSH (+ sudo) | `/etc/shadow` |
+| `SETTINGS_PASSWORD` | пароль на раздел Settings | `shell.pass` на флешке |
+| `HOSTNAME`, `STATIC_IP`, `GATEWAY`, `DNS`, `NTP_SERVER`, `KEYMAP` | сеть/время/раскладка | `tc.conf` на флешке |
+| `RDP_USER`, `RDP_DOMAIN`, `RDP_EXTRA`, `AUTOCONNECT` | RDP-дефолты, автоконнект | `tc.conf` на флешке |
+| `PRINTER`, `PRINTER_NAME` | сетевой принтер | `tc.conf` на флешке |
+| `SERVERS` | список серверов (`Имя=адрес`) | `servers.conf` на флешке |
+
+Пароли — **открытым текстом** (система сама зашифрует) **или готовым хэшем**
+(`$6$…` для root/user — `mkpasswd -m sha-512`; 64-hex sha256 для Settings).
+Без `site.env` собирается дефолт: `user`/`1234`, стартовый сервер из
+`servers.conf.sample`, root — небезопасная заглушка. Флеш-файлы (`servers.conf`,
+`tc.conf`, `shell.pass`) остаются правимыми на месте — из меню Settings или
+руками на флешке, `site.env` лишь задаёт стартовые значения.
+
+Пароль root можно задать и переменной окружения (приоритетнее `site.env`):
 
 ```sh
 TC_ROOT_PASSWORD='свой-пароль' ./build.sh
@@ -216,17 +247,18 @@ TC_ROOT_PASSWORD='свой-пароль' ./build.sh
   `etc/default/dropbear` со строкой `DROPBEAR_ARGS="-s -g"` — но у нас dropbear
   запускается своим `S53ssh`, так что проще отредактировать его.
 
-### Непривилегированный пользователь `user`
+### Непривилегированный пользователь для SSH
 
-Для входа по SSH в образ вшит пользователь **`user`** с паролем **`1234`** и
-правом **sudo** (`/etc/sudoers.d/thinclient`). Логин: `ssh user@<ip>` →
-`sudo -i` для root-прав. Пароль задан в `board/thinclient/users.table`
-(поле `=1234` → Buildroot шифрует sha-512).
+Для входа по SSH в образ вшит пользователь (по умолчанию **`user`**/**`1234`**)
+с правом **sudo** (`/etc/sudoers.d/thinclient`). Логин: `ssh user@<ip>` →
+`sudo -i` для root-прав. Имя и пароль задаются в **`site.env`**
+(`USER_NAME`/`USER_PASSWORD`; см. «Единый конфиг `site.env`»), откуда `build.sh`
+генерит таблицу пользователей.
 
-> ⚠️ `1234` — **слабый пароль по умолчанию**, к тому же с полным sudo это
-> фактически root по SSH. Для боевого парка поменяй его в `users.table` и
-> пересобери, либо `passwd user` в рантайме (эфемерно — система в RAM), либо
-> сузь права в `sudoers.d`. Не оставляй `1234` в проде.
+> ⚠️ Дефолт `user`/`1234` — **слабый пароль**, к тому же с полным sudo это
+> фактически root по SSH. Для боевого парка задай свой в `site.env` (текстом
+> или хэшем) и пересобери, либо `passwd user` в рантайме (эфемерно — система в
+> RAM), либо сузь права в `sudoers.d`. Не оставляй `1234` в проде.
 
 Полноценные `useradd`/`usermod`/`userdel`/`groupadd` (пакет `shadow`) есть в
 образе — админ может завести ещё юзеров в рантайме (тоже эфемерно, до ребута).
@@ -234,6 +266,7 @@ TC_ROOT_PASSWORD='свой-пароль' ./build.sh
 ## Структура репозитория
 
 ```
+site.env.example                   ЕДИНЫЙ конфиг образа (шаблон; правишь site.env)
 configs/thinclient_defconfig       конфиг Buildroot (пакеты, ядро, initramfs)
 package/tc-launcher/               ncurses-лаунчер (C, пакет BR2_EXTERNAL):
                                    Config.in, tc-launcher.mk, src/tc-launcher.c
@@ -244,8 +277,7 @@ board/thinclient/
                                    сетевухи, USB, vfat/iso9660, usblp
   syslinux.cfg                     загрузчик BIOS (NOESCAPE), консоль на tty2
   grub-efi.cfg                     загрузчик UEFI (встраивается в bootX.efi)
-  servers.conf.sample              стартовый список серверов
-  users.table                      вшитый юзер user/1234 (SSH + sudo)
+  servers.conf.sample              стартовый список серверов (дефолт без site.env)
   post-build.sh                    чистка target (автозапуск X и т.п.), права sudoers.d
   post-image.sh                    сборка usb.img (MBR+FAT32) и hybrid ISO+EFI
   rootfs-overlay/

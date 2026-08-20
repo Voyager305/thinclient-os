@@ -12,6 +12,55 @@ set -e
 BOARD_DIR="$(cd "$(dirname "$0")" && pwd)"
 PART_MB=256
 
+# ---- Флеш-конфиг из единого site.env (шаблон — site.env.example) ----
+# Готовит файлы для FAT-раздела/ISO: servers.conf и tc.conf.sample — всегда;
+# активные tc.conf/servers.conf/shell.pass — если задан site.env в корне репо.
+# Так один файл site.env запекает и rootfs-часть (build.sh), и флеш-часть.
+SITE_ENV="$BOARD_DIR/../../site.env"
+SEED="$BINARIES_DIR/site-seed"
+gen_seed() {
+    rm -rf "$SEED"; mkdir -p "$SEED"
+    cp "$BOARD_DIR/servers.conf.sample" "$SEED/servers.conf"
+    cp "$BOARD_DIR/tc.conf.sample"      "$SEED/tc.conf.sample"
+    [ -f "$SITE_ENV" ] || return 0
+    echo ">>> site.env: запекаю конфиг площадки в образ" >&2
+    (
+        # shellcheck disable=SC1090
+        . "$SITE_ENV"
+        # серверы: строки "Имя=адрес[:порт]" -> "Имя;адрес"
+        if [ -n "${SERVERS:-}" ]; then
+            printf '%s\n' "$SERVERS" | {
+                first=1
+                while IFS= read -r ln; do
+                    ln=$(printf '%s' "$ln" | tr -d '\r')
+                    case "$ln" in ''|\#*) continue ;; esac
+                    nm=$(printf '%s' "${ln%%=*}" | sed 's/^ *//;s/ *$//')
+                    ad=$(printf '%s' "${ln#*=}"  | sed 's/^ *//;s/ *$//')
+                    [ -n "$nm" ] && [ -n "$ad" ] || continue
+                    [ "$first" = 1 ] && { : > "$SEED/servers.conf"; first=0; }
+                    printf '%s;%s\r\n' "$nm" "$ad" >> "$SEED/servers.conf"
+                done
+            }
+        fi
+        # tc.conf (активный) — только непустые ключи
+        : > "$SEED/tc.conf"
+        for k in HOSTNAME STATIC_IP GATEWAY DNS NTP_SERVER KEYMAP \
+                 RDP_USER RDP_DOMAIN RDP_EXTRA AUTOCONNECT PRINTER PRINTER_NAME; do
+            eval "v=\${$k:-}"
+            [ -n "$v" ] && printf '%s=%s\r\n' "$k" "$v" >> "$SEED/tc.conf"
+        done
+        [ -s "$SEED/tc.conf" ] || rm -f "$SEED/tc.conf"
+        # shell.pass (пароль на Settings): готовый sha256 (64 hex) или текст
+        if [ -n "${SETTINGS_PASSWORD:-}" ]; then
+            if printf '%s' "$SETTINGS_PASSWORD" | grep -qiE '^[0-9a-f]{64}$'; then
+                printf '%s\n' "$SETTINGS_PASSWORD" > "$SEED/shell.pass"
+            else
+                printf '%s' "$SETTINGS_PASSWORD" | sha256sum | cut -c1-64 > "$SEED/shell.pass"
+            fi
+        fi
+    )
+}
+
 # UEFI: bootx64/bootia32 генерятся grub-mkstandalone (конфиг вшивается
 # внутрь образа загрузчика). Buildroot тут не помощник: на i686 он не
 # собирает x86_64-efi. Нет grub-утилит в системе — тихо живём BIOS-only.
@@ -66,8 +115,10 @@ build_img() {
     mcopy -i "$PART" "$BINARIES_DIR/bzImage"          ::/bzImage
     mcopy -i "$PART" "$BINARIES_DIR/rootfs.cpio.gz"   ::/initrd.gz
     mcopy -i "$PART" "$BOARD_DIR/syslinux.cfg"        ::/syslinux.cfg
-    mcopy -i "$PART" "$BOARD_DIR/servers.conf.sample" ::/servers.conf
-    mcopy -i "$PART" "$BOARD_DIR/tc.conf.sample"      ::/tc.conf.sample
+    mcopy -i "$PART" "$SEED/servers.conf"             ::/servers.conf
+    mcopy -i "$PART" "$SEED/tc.conf.sample"           ::/tc.conf.sample
+    [ -f "$SEED/tc.conf" ]    && mcopy -i "$PART" "$SEED/tc.conf"    ::/tc.conf
+    [ -f "$SEED/shell.pass" ] && mcopy -i "$PART" "$SEED/shell.pass" ::/shell.pass
     add_efi_to_fat "$PART"
     syslinux --install "$PART"
 
@@ -116,8 +167,10 @@ build_iso() {
     mkdir -p "$ISO_DIR/isolinux"
     cp "$BINARIES_DIR/bzImage"          "$ISO_DIR/bzImage"
     cp "$BINARIES_DIR/rootfs.cpio.gz"   "$ISO_DIR/initrd.gz"
-    cp "$BOARD_DIR/servers.conf.sample" "$ISO_DIR/servers.conf"
-    cp "$BOARD_DIR/tc.conf.sample"      "$ISO_DIR/tc.conf.sample"
+    cp "$SEED/servers.conf"             "$ISO_DIR/servers.conf"
+    cp "$SEED/tc.conf.sample"           "$ISO_DIR/tc.conf.sample"
+    [ -f "$SEED/tc.conf" ]    && cp "$SEED/tc.conf"    "$ISO_DIR/tc.conf"
+    [ -f "$SEED/shell.pass" ] && cp "$SEED/shell.pass" "$ISO_DIR/shell.pass"
     cp "$BOARD_DIR/syslinux.cfg"        "$ISO_DIR/isolinux/isolinux.cfg"
     cp "$ISOLINUX_BIN"                  "$ISO_DIR/isolinux/"
     [ -n "$LDLINUX" ] && cp "$LDLINUX"  "$ISO_DIR/isolinux/"
@@ -138,6 +191,8 @@ build_iso() {
     rm -rf "$ISO_DIR"
     echo ">>> Готово: $ISO ($(du -h "$ISO" | cut -f1))"
 }
+
+gen_seed                       # подготовить servers.conf/tc.conf/shell.pass из site.env
 
 if command -v syslinux >/dev/null 2>&1; then
     build_img
