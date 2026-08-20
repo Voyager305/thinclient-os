@@ -1,4 +1,5 @@
-# user может выполнять команды через sudo (с вводом своего пароля).
+# Право sudo даём ГРУППЕ wheel (а не конкретному имени) — тогда sudo работает
+# при любом USER_NAME из site.env. build.sh кладёт SSH-юзера в группу wheel.
 # Подключается через #includedir /etc/sudoers.d в /etc/sudoers (пакет sudo).
 # Права на этот файл выставляются в post-build.sh (sudo требует 0440 root:root).
-user ALL=(ALL) ALL
+%wheel ALL=(ALL) ALL

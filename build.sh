@@ -53,10 +53,12 @@ case "$TC_USER_PASSWORD" in
     *)   _upw="=$TC_USER_PASSWORD" ;;   # открытый текст
 esac
 mkdir -p .site
+# группа wheel: mkusers создаст её сам; sudo даём именно группе wheel
+# (/etc/sudoers.d/thinclient), поэтому sudo работает при ЛЮБОМ имени юзера.
 cat > .site/users.table <<EOF
 # Сгенерировано build.sh из site.env — вручную не редактировать.
 # username uid group gid password home shell groups comment
-$TC_USER_NAME -1 $TC_USER_NAME -1 $_upw /home/$TC_USER_NAME /bin/bash - Thin client SSH user
+$TC_USER_NAME -1 $TC_USER_NAME -1 $_upw /home/$TC_USER_NAME /bin/bash wheel Thin client SSH user
 EOF
 
 # Версия образа (из git) → /etc/tc-release, показывается в углу меню.
