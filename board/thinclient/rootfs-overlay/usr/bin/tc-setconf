@@ -1,0 +1,52 @@
+#!/bin/sh
+# Безопасная запись ОДНОГО ключа в /mnt/flash/tc.conf (формат KEY=VALUE).
+# Пара к tc-getconf. Используется экраном настроек (tc-menu SETTINGS).
+# Использование: tc-setconf KEY VALUE
+#   - первое НЕзакомментированное вхождение KEY= заменяется;
+#   - если ключа нет — строка добавляется в конец;
+#   - пустое VALUE удаляет ключ (строку);
+#   - комментарии и остальные строки сохраняются как есть;
+#   - флешку переводим в rw только на время записи и обратно в ro.
+# Коды возврата: 0 — записано; 1 — носитель только для чтения; 2 — плохой ключ.
+CONF=/mnt/flash/tc.conf
+KEY=$1
+VAL=$2
+
+# имя ключа — только латиница/цифры/подчёркивание (защита от инъекции)
+case "$KEY" in
+    ''|*[!A-Za-z0-9_]*) echo "tc-setconf: bad key '$KEY'" >&2; exit 2 ;;
+esac
+
+# значение — строго одна строка (без CR/LF, чтобы не разорвать KEY=VALUE)
+VAL=$(printf '%s' "$VAL" | tr -d '\r\n')
+
+if ! mount -o remount,rw /mnt/flash 2>/dev/null; then
+    echo "tc-setconf: read-only media, cannot save" >&2
+    exit 1
+fi
+
+[ -f "$CONF" ] || : > "$CONF"
+tmp="$CONF.tmp"
+done_it=0
+while IFS= read -r ln || [ -n "$ln" ]; do
+    cur=$(printf '%s' "$ln" | tr -d '\r')
+    case "$cur" in
+        "$KEY"=*)
+            if [ "$done_it" = 0 ]; then
+                [ -n "$VAL" ] && printf '%s=%s\r\n' "$KEY" "$VAL"
+                done_it=1                       # первое вхождение — заменили/удалили
+            else
+                printf '%s\n' "$ln"             # прочие вхождения не трогаем
+            fi
+            ;;
+        *)
+            printf '%s\n' "$ln"
+            ;;
+    esac
+done < "$CONF" > "$tmp"
+if [ "$done_it" = 0 ] && [ -n "$VAL" ]; then
+    printf '%s=%s\r\n' "$KEY" "$VAL" >> "$tmp"  # ключа не было — добавляем в конец
+fi
+mv "$tmp" "$CONF" 2>/dev/null && sync
+mount -o remount,ro /mnt/flash 2>/dev/null
+exit 0

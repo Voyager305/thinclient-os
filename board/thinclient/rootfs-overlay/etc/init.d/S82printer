@@ -1,0 +1,55 @@
+#!/bin/sh
+# Сетевой принтер для проброса в RDP-сессию (xfreerdp /printer).
+# Читает tc.conf на флешке:
+#   PRINTER=socket://192.168.0.20:9100   URI сетевого принтера. Также:
+#       ipp://host/ipp/print, ipps://..., lpd://host/queue, http://host:631/...
+#   PRINTER_NAME=office                  имя очереди (как увидит Windows);
+#                                        по умолчанию "printer".
+# Создаём RAW-очередь CUPS: задание уходит на принтер как есть. Для RDP это
+# верно — Windows рендерит своим драйвером на стороне сервера, а тонкий клиент
+# лишь пересылает готовый поток на сетевой принтер. USB-принтеры со своими
+# драйверами здесь НЕ настраиваются (нужен драйвер/PPD — см. README).
+#
+# Всё делаем тихо и не блокируем загрузку: нет PRINTER / нет lpadmin / cupsd
+# не поднялся — просто выходим, меню всё равно стартует. Лог: /var/log/tc-printer.log
+#
+# Запускается ПОСЛЕ S81cupsd (нужен работающий планировщик CUPS).
+
+LOG=/var/log/tc-printer.log
+
+[ -x /usr/sbin/lpadmin ] || exit 0
+
+URI=$(/usr/bin/tc-getconf PRINTER)
+[ -n "$URI" ] || exit 0
+
+NAME=$(/usr/bin/tc-getconf PRINTER_NAME)
+[ -n "$NAME" ] || NAME=printer
+# имя очереди CUPS: только безопасные символы (без пробелов/спецсимволов)
+NAME=$(printf '%s' "$NAME" | tr -cd 'A-Za-z0-9_-')
+[ -n "$NAME" ] || NAME=printer
+
+start() {
+    # дождаться, пока cupsd поднимет планировщик (до ~20 c), иначе lpadmin
+    # не достучится до него и тихо не создаст очередь
+    i=0
+    while [ "$i" -lt 20 ]; do
+        lpstat -r >/dev/null 2>&1 && break
+        sleep 1
+        i=$((i + 1))
+    done
+
+    if lpadmin -p "$NAME" -E -v "$URI" -m raw >"$LOG" 2>&1; then
+        lpadmin -d "$NAME" >>"$LOG" 2>&1          # сделать принтером по умолчанию
+        lpstat -v "$NAME"  >>"$LOG" 2>&1
+        echo "tc-printer: очередь '$NAME' -> $URI создана" >>"$LOG"
+    else
+        echo "tc-printer: lpadmin не смог создать очередь '$NAME' ($URI)" >>"$LOG"
+    fi
+}
+
+case "$1" in
+    start|"") start ;;
+    stop)     lpadmin -x "$NAME" >/dev/null 2>&1 ;;
+    restart)  lpadmin -x "$NAME" >/dev/null 2>&1; start ;;
+    *)        echo "usage: $0 {start|stop|restart}" >&2; exit 1 ;;
+esac

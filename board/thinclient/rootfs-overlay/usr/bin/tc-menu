@@ -187,6 +187,107 @@ run_diag() {
     read -r _
 }
 
+# Экран настроек: правка ключей tc.conf прямо из меню (сеть, RDP-дефолты,
+# имя хоста, автоподключение). Пишем безопасным tc-setconf (ремоунт rw/ro,
+# без eval). На ISO (только чтение) — честный отказ на входе.
+SET=/usr/bin/tc-setconf
+GET=/usr/bin/tc-getconf
+
+_net_mode() {
+    ip=$($GET STATIC_IP)
+    if [ -n "$ip" ]; then echo "static $ip"; else echo "DHCP"; fi
+}
+
+# Правка одного текстового ключа: Enter пустым — оставить; '-' — очистить.
+set_key() {   # $1=KEY  $2=подпись
+    cur=$($GET "$1")
+    clear
+    echo "=== $2 ==="
+    echo "Текущее: ${cur:-<пусто>}"
+    echo "Enter пустым — оставить как есть; '-' — очистить."
+    printf "Новое значение: "
+    read -r v
+    [ -z "$v" ] && return
+    [ "$v" = "-" ] && v=""
+    if ! $SET "$1" "$v"; then
+        echo "Не сохранено (носитель только для чтения?)"
+        sleep 2
+    fi
+}
+
+set_network() {
+    clear
+    echo "=== Сеть ==="
+    echo "Сейчас: $(_net_mode)"
+    echo
+    echo " 1) DHCP (очистить статику)"
+    echo " 2) Статический IP"
+    echo " q) назад"
+    printf "> "
+    read -r c
+    case "$c" in
+        1)
+            $SET STATIC_IP ""; $SET GATEWAY ""; $SET DNS ""
+            echo "Переключено на DHCP. Применится после ребута (или tc-netup)."
+            sleep 2
+            ;;
+        2)
+            printf "IP/маска (напр. 192.168.0.50/24): "; read -r a
+            [ -n "$a" ] && $SET STATIC_IP "$a"
+            printf "Шлюз (напр. 192.168.0.1): ";        read -r g
+            [ -n "$g" ] && $SET GATEWAY "$g"
+            printf "DNS (напр. 192.168.0.1): ";         read -r d
+            [ -n "$d" ] && $SET DNS "$d"
+            echo "Сохранено. Применится после ребута (или tc-netup)."
+            sleep 2
+            ;;
+        *) ;;
+    esac
+}
+
+run_settings() {
+    # Флешка ro (ISO) — настройки хранить негде, честно говорим об этом сразу,
+    # чтобы админ не тыкал в мёртвое меню.
+    if ! mount -o remount,rw /mnt/flash 2>/dev/null; then
+        clear
+        echo "=== Настройки ==="
+        echo "Флешка только для чтения (ISO-образ) — сохранять tc.conf некуда."
+        echo "Нужен usb.img или флешка с разделом TCDATA."
+        printf "Enter — назад..."
+        read -r _
+        return
+    fi
+    mount -o remount,ro /mnt/flash 2>/dev/null   # запись делает сам tc-setconf
+    while true; do
+        clear
+        echo "=== Настройки (tc.conf на флешке) ==="
+        echo "Имя хоста:    $($GET HOSTNAME)"
+        echo "Сеть:         $(_net_mode)"
+        echo "RDP логин:    $($GET RDP_USER)"
+        echo "RDP домен:    $($GET RDP_DOMAIN)"
+        echo "Автоконнект:  $($GET AUTOCONNECT)"
+        echo
+        echo " 1) Сеть (DHCP / статический IP)"
+        echo " 2) RDP логин по умолчанию"
+        echo " 3) RDP домен по умолчанию"
+        echo " 4) Имя хоста"
+        echo " 5) Автоподключение (IP или список через запятую)"
+        echo " q) Назад в меню"
+        echo
+        printf "> "
+        read -r c
+        case "$c" in
+            1) set_network ;;
+            2) set_key RDP_USER   "RDP логин по умолчанию" ;;
+            3) set_key RDP_DOMAIN "RDP домен по умолчанию" ;;
+            4) set_key HOSTNAME   "Имя хоста" ;;
+            5) set_key AUTOCONNECT "Автоподключение (IP или список через запятую)" ;;
+            q|Q|"") return ;;
+            *) ;;
+        esac
+    done
+}
+
 # Экран управления серверами: лаунчер в режиме --manage возвращает одно
 # действие (ADD/EDIT/DELETE/BACK), применяем и снова показываем экран,
 # пока не BACK/пусто. Вывод лаунчера НЕ перехватываем (ncurses рисует в
@@ -248,6 +349,9 @@ while true; do
             ;;
         DIAG)
             run_diag
+            ;;
+        SETTINGS)
+            run_settings
             ;;
         SHELL)
             open_shell

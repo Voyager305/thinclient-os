@@ -7,11 +7,17 @@
  * и перезапускает лаунчер.
  *
  * Протокол в /tmp/tc-choice (одна строка):
- *   CONNECT <ip>     подключиться к серверу
- *   ADD <name>;<ip>  добавить сервер в servers.conf
- *   SHELL            консоль Linux
- *   REBOOT           перезагрузка
- *   POWEROFF         выключение
+ *   CONNECT <ip>            подключиться к серверу
+ *   MANAGE                  экран управления серверами (add/edit/delete)
+ *   ADD <name>;<ip>         добавить сервер в servers.conf
+ *   EDIT <old>\t<new>       заменить запись сервера
+ *   DELETE <name>;<ip>      удалить сервер
+ *   BACK                    выйти из экрана управления
+ *   SHELL                   консоль Linux
+ *   DIAG                    экран диагностики (сеть/ping/логи)
+ *   SETTINGS                экран настроек (сеть, RDP-дефолты) в tc.conf
+ *   REBOOT                  перезагрузка
+ *   POWEROFF                выключение
  *
  * ВАЖНО: набор действий должен совпадать со списком case в tc-menu.
  */
@@ -114,8 +120,8 @@ static void write_choice(const char *fmt, const char *arg1, const char *arg2)
 /* сервисные кнопки — вертикальным столбиком внизу. Console показывается
  * всегда; пароль на неё (опционально) ставит админ файлом shell.pass —
  * проверку делает tc-menu. */
-#define NBAR 4
-static const char *bar_label[NBAR] = { " Console ", " Diag ", " Reboot ", " PowerOff " };
+#define NBAR 5
+static const char *bar_label[NBAR] = { " Console ", " Diag ", " Settings ", " Reboot ", " PowerOff " };
 static int nbar = NBAR;   /* 0 в режиме управления серверами */
 static int manage = 0;    /* 1 = экран «Manage servers» (add/edit/delete) */
 
@@ -328,7 +334,7 @@ static int do_delete(int i)
 
 static void bar_action(int bsel)
 {
-    static const char *act[NBAR] = { "SHELL", "DIAG", "REBOOT", "POWEROFF" };
+    static const char *act[NBAR] = { "SHELL", "DIAG", "SETTINGS", "REBOOT", "POWEROFF" };
 
     endwin();
     write_choice(act[bsel], NULL, NULL);
@@ -432,7 +438,8 @@ int main(int argc, char **argv)
                 return 0;
             }
             break;
-        /* F-клавиши: сервис (только main): Console/Diag/Reboot/PowerOff */
+        /* F-клавиши: сервис (только main):
+         * Console/Diag/Settings/Reboot/PowerOff */
         case KEY_F(3):
             if (!manage) { bar_action(0); return 0; }
             break;
@@ -444,6 +451,9 @@ int main(int argc, char **argv)
             break;
         case KEY_F(6):
             if (!manage) { bar_action(3); return 0; }
+            break;
+        case KEY_F(7):
+            if (!manage) { bar_action(4); return 0; }
             break;
         default:
             break;

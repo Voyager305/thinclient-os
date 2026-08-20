@@ -18,12 +18,13 @@ ncurses-лаунчер · Xorg (поднимается только на вре�
   современных десктопов — нативная графика на Intel/NVIDIA/старых AMD,
   VESA-fallback на остальном, широкая поддержка сетевых карт.
 - **Интерфейс**: тёмный ncurses-лаунчер — список серверов по центру,
-  сервисные кнопки (Console / Reboot / PowerOff) столбиком внизу, hostname
-  и IP в углу. Управление стрелками и Enter; добавление сервера из меню.
+  сервисные кнопки (Console / Diag / Settings / Reboot / PowerOff) столбиком
+  внизу, hostname и IP в углу. Управление стрелками и Enter; добавление и
+  правка сервера из меню, настройки сети/RDP — из экрана Settings.
 - **RDP**: FreeRDP 2.11 — Windows Server 2008 R2 … 2022 (RDP 7–10, NLA,
   TLS 1.2), нативное разрешение монитора, динамическая смена разрешения,
-  буфер обмена. Канал принтера (`/printer`) включён, но настройки принтера
-  на клиенте пока нет — проброс работает лишь для уже настроенной очереди.
+  буфер обмена. Проброс сетевого принтера (`/printer`): укажи `PRINTER=` в
+  `tc.conf` — клиент создаст очередь и пробросит её в сессию (см. ниже).
 - **Сеть**: DHCP на всех интерфейсах, hostname `tc-<mac без разделителей>`
   (виден в DHCP leases и в RDP-сессии), самовосстановление — интерфейс,
   появившийся после загрузки, подхватывается без перезагрузки.
@@ -59,10 +60,17 @@ ncurses-лаунчер · Xorg (поднимается только на вре�
 ## Использование
 
 - **Меню**: стрелки вверх/вниз ходят по кругу «серверы → Manage servers →
-  Console → Diag → Reboot → PowerOff», Enter выполняет. Enter на сервере —
-  сразу подключение.
+  Console → Diag → Settings → Reboot → PowerOff», Enter выполняет. Enter на
+  сервере — сразу подключение. Сервис-кнопки продублированы F-клавишами
+  (F3 Console, F4 Diag, F5 Settings, F6 Reboot, F7 PowerOff).
 - **Diag**: экран диагностики без ухода в шелл — интерфейсы/IP, маршруты,
   DNS, ping до шлюза, последние ошибки RDP-сессии.
+- **Settings**: правка `tc.conf` прямо из меню, без консоли и текстового
+  редактора — сеть (переключить DHCP ↔ статический IP/шлюз/DNS), RDP-логин и
+  домен по умолчанию, имя хоста, автоподключение. Пишется на флешку тем же
+  безопасным механизмом (`tc-setconf`); на read-only носителе (ISO) экран
+  честно сообщает, что сохранять некуда. Сетевые изменения применяются после
+  перезагрузки.
 - **Управление серверами**: пункт `Manage servers` открывает отдельный
   экран — добавить (`a` или `+ Add server`), править (`e` или Enter на
   сервере; пустое поле оставляет старое значение), удалить (`d`,
@@ -97,6 +105,14 @@ ncurses-лаунчер · Xorg (поднимается только на вре�
   - `NTP_SERVER=<ip>` — синхронизация времени (нужна для RDP-логина: NLA
     падает при кривых часах). `KEYMAP=<us|ru|…>` — раскладка консоли для
     tty2 (RDP-раскладку задавай через `RDP_EXTRA`, напр. `/kbd:...`).
+  - `PRINTER=<uri>` + `PRINTER_NAME=<имя>` — **сетевой** принтер, пробрасы­
+    ваемый в RDP-сессию. Клиент создаёт RAW-очередь CUPS и отдаёт её через
+    `/printer`; печатает Windows своим драйвером. URI: `socket://ip:9100`
+    (JetDirect, самый частый), `lpd://ip/queue`, `ipp://host/ipp/print`
+    (`ipps://` — с TLS). USB-принтер со своим драйвером так не настроить —
+    подключай его через принт-сервер как сетевой либо ставь драйвер на
+    RDP-сервере. Почти все ключи `tc.conf` (кроме принтера) правятся из
+    экрана **Settings** — файл руками трогать не обязательно.
 - **Консоль Linux**: пункт Console — root-шелл (bash). По умолчанию **без
   пароля**. Чтобы запаролить, положи на флешку файл `shell.pass` с
   sha256-хэшем — тогда Console будет его спрашивать (забыл пароль — удали
@@ -211,14 +227,20 @@ board/thinclient/
     etc/inittab                    tc-menu на tty1, getty на tty2
     etc/X11/xorg.conf.d/10-fbdev.conf  X через fbdev + DontVTSwitch/DontZap
     etc/init.d/S00splash           заставка psplash
+    etc/init.d/S02watchdog         сторож /dev/watchdog (если есть)
     etc/init.d/S35console          консольные шрифты (кириллица)
-    etc/init.d/S40network          сеть: hostname tc-<mac>, DHCP (tc-netup)
     etc/init.d/S50flash            носитель конфигов: поиск/создание TCDATA
+    etc/init.d/S51network          сеть: hostname, DHCP/статика (tc-netup)
+    etc/init.d/S52tcconf           tc.conf: раскладка, NTP, durable-пароль
+    etc/init.d/S53ssh              dropbear: host-key/ключи на TCDATA
+    etc/init.d/S82printer          сетевой принтер из tc.conf (RAW CUPS)
     etc/init.d/S98splashdone       гасит заставку перед меню
     etc/profile.d/tc-prompt.sh     промпт user@host:cwd
     root/.bash_profile, .bashrc, .vimrc   окружение root-консоли
-    usr/bin/tc-menu                обёртка: исполняет выбор лаунчера, Console
+    usr/bin/tc-menu                обёртка: выбор лаунчера, Console/Diag/Settings
     usr/bin/tc-edit                правка файлов на флешке (rw→edit→ro)
+    usr/bin/tc-getconf             безопасное чтение ключа tc.conf (без eval)
+    usr/bin/tc-setconf             безопасная запись ключа tc.conf (экран Settings)
     usr/bin/tc-netup               идемпотентный подъём сети
     usr/bin/tc-session             запуск xfreerdp внутри X
 build.sh                           сборка (Docker/нативно), TC_ROOT_PASSWORD
