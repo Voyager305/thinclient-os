@@ -244,12 +244,16 @@
   `less /var/log/xsession.log`.
 
 ### 5.2 «X server failed to start»
-- **Тихо?** нет (экран 5.1). **Причина:** X не поднялся — нет `/dev/fb0`,
-  сбой fbdev/xinit/xauth, конфликт драйвера (`10-fbdev.conf` заставляет
-  fbdev, чтобы не виснуть на nouveau/modesetting).
-- **Проверить (tty2):** `cat /var/log/xsession.log`, `ls /dev/fb0`.
-- **Что сделать:** обеспечить framebuffer (1.3/2.1); не удалять
-  `10-fbdev.conf`.
+- **Тихо?** нет (экран 5.1). **Причина:** X не поднялся — «no screens found»
+  (не привязался KMS-драйвер, нет `/dev/dri/card0`), сбой xinit/xauth, или
+  glamor-зависон на редких картах. X ведём через `modesetting` (KMS) с
+  `AccelMethod none` — файл `10-video.conf`.
+- **Проверить (tty2):** `cat /var/log/xsession.log`; `ls /dev/dri /dev/fb*`;
+  `dmesg | grep -iE 'i915|drm'` — привязался ли видеодрайвер к чипу.
+- **Что сделать:** если есть `/dev/dri/card0`, X должен подниматься сам; если
+  KMS не привязался (нет `card0`) — совсем древний чип без KMS: заменить в
+  `10-video.conf` `Driver "modesetting"` на `"fbdev"` и убедиться, что
+  `vga=791` даёт `/dev/fb0` (1.3/2.1).
 
 ### 5.3 «xfreerdp exited with code N» / не подключается
 - **Тихо?** нет (экран 5.1). **Причина:** неверный адрес, хост недоступен,

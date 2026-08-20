@@ -234,7 +234,7 @@ board/thinclient/
   post-image.sh                    сборка usb.img (MBR+FAT32) и hybrid ISO+EFI
   rootfs-overlay/
     etc/inittab                    tc-menu на tty1, getty на tty2
-    etc/X11/xorg.conf.d/10-fbdev.conf  X через fbdev + DontVTSwitch/DontZap
+    etc/X11/xorg.conf.d/10-video.conf  X через modesetting(KMS) + DontVTSwitch/DontZap
     etc/init.d/S00splash           заставка psplash
     etc/init.d/S02watchdog         сторож /dev/watchdog (если есть)
     etc/init.d/S35console          консольные шрифты (кириллица)
@@ -277,7 +277,7 @@ LICENSE                            MIT
 **Видео (нативное разрешение через KMS)**
 | Семейство | Драйвер | Примеры |
 |---|---|---|
-| Intel встройка | i915 | GMA 900/950/3100/4500, HD Graphics — атомные неттопы и десктопные чипсеты |
+| Intel встройка | i915 | GMA 900/950/3100/3150/4500, HD Graphics — атомные неттопы и десктопные чипсеты (в т.ч. Atom D525/Pineview) |
 | Intel Poulsbo/Cedar Trail | gma500 | GMA 500/600/3600/3650 (N2600/N2800/D2500/D2700), без ускорения |
 | NVIDIA | nouveau | GeForce 6xxx … GTX 7xx полноценно; новее — вывод без ускорения |
 | AMD (старые) | radeon | Radeon от R300 до HD 8xxx (до GCN 1-го поколения) |

@@ -26,3 +26,8 @@ rm -f "$TARGET_DIR/usr/bin/dialog" "$TARGET_DIR/etc/dialogrc"
 # SSH переехал на S53ssh (после флешки, host-key персистится на TCDATA).
 # Убираем скелетный dropbear-автостарт, иначе стартует рано с ключом в RAM.
 rm -f "$TARGET_DIR/etc/init.d/S50dropbear"
+
+# Драйвер X переехал с fbdev на modesetting (10-video.conf). Старый
+# 10-fbdev.conf overlay сам не удалит — иначе он остаётся в target и снова
+# форсит Driver "fbdev" ("no screens found" на реальном Intel/KMS).
+rm -f "$TARGET_DIR/etc/X11/xorg.conf.d/10-fbdev.conf"
